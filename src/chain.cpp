@@ -10,13 +10,13 @@ using namespace std;
 /**
  * CChain implementation
  */
-void CChain::SetTip(CBlockIndex *pindex) {
+void CChain::SetTip(CBlockIndex *pindex, bool fProofOfStake) {
     if (pindex == NULL) {
         vChain.clear();
         return;
     }
     vChain.resize(pindex->nHeight + 1);
-    while (pindex && vChain[pindex->nHeight] != pindex) {
+    while (pindex && vChain[pindex->nHeight] && (pindex->IsProofOfStake() != fProofOfStake)) {
         vChain[pindex->nHeight] = pindex;
         pindex = pindex->pprev;
     }

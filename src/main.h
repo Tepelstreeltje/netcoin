@@ -18,6 +18,7 @@
 #include "primitives/transaction.h"
 #include "net.h"
 #include "pow.h"
+#include "pos.h"
 #include "script/script.h"
 #include "script/sigcache.h"
 #include "script/standard.h"
@@ -26,6 +27,7 @@
 #include "txmempool.h"
 #include "uint256.h"
 #include "undo.h"
+#include "test/bignum.h"
 
 #include <algorithm>
 #include <exception>
@@ -35,6 +37,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 
 #include <boost/unordered_map.hpp>
 
@@ -128,6 +131,7 @@ extern bool fTxIndex;
 extern bool fIsBareMultisigStd;
 extern unsigned int nCoinCacheSize;
 extern CFeeRate minRelayTxFee;
+extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 
 /** Best header we've seen so far (used for getheaders queries' starting points). */
 extern CBlockIndex *pindexBestHeader;
@@ -142,7 +146,7 @@ void UnregisterValidationInterface(CValidationInterface* pwalletIn);
 /** Unregister all wallets from core */
 void UnregisterAllValidationInterfaces();
 /** Push an updated transaction to all registered wallets */
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = NULL);
+void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = NULL, bool fUpdate = false, bool fConnect = true);
 
 /** Register with a network node to receive its signals */
 void RegisterNodeSignals(CNodeSignals& nodeSignals);

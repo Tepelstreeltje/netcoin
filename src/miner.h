@@ -7,6 +7,7 @@
 #define BITCOIN_MINER_H
 
 #include <stdint.h>
+#include <pos.h>
 
 class CBlock;
 class CBlockHeader;
@@ -20,12 +21,15 @@ struct CBlockTemplate;
 /** Run the miner threads */
 void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads);
 /** Generate a new block, without valid proof-of-work */
-CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn);
+CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, bool fProofOfStake=false);
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey);
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
-/** Check mined block */
+/** Check mined proof-of-work block */
 bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
+/** Check mined proof-of-stake block */
+bool CheckStake(CBlock* pblock, CWallet& wallet);
+
 void UpdateTime(CBlockHeader* block, const CBlockIndex* pindexPrev);
 
 extern double dHashesPerSec;

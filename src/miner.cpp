@@ -82,14 +82,15 @@ public:
 
 void UpdateTime(CBlockHeader* pblock, const CBlockIndex* pindexPrev)
 {
-    pblock->nTime = std::max(pindexPrev->GetMedianTimePast()+1, GetAdjustedTime());
+      pblock->nTime = std::max(pindexPrev->GetMedianTimePast()+1, GetAdjustedTime());
 
     // Updating time can change work required on testnet:
     if (Params().AllowMinDifficultyBlocks())
-        pblock->nBits = GetNextWorkRequired(pindexPrev, pblock);
+        pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, IsProofOfStake());
+
 }
 
-CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
+CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, bool fProofOfStake)
 {
     // Create new block
     auto_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
@@ -321,15 +322,17 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         LogPrintf("CreateNewBlock(): total size %u\n", nBlockSize);
 
         // Compute final coinbase transaction.
-        txNew.vout[0].nValue = GetBlockValue(nHeight, nFees);
-        txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
-        pblock->vtx[0] = txNew;
-        pblocktemplate->vTxFees[0] = -nFees;
+        if (!fProofOfStake)
+           txNew.vout[0].nValue = GetBlockValue(nHeight, nFees);
+           txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
+           pblock->vtx[0] = txNew;
+           pblocktemplate->vTxFees[0] = -nFees;
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        UpdateTime(pblock, pindexPrev);
-        pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock);
+        if (!fProofOfStake)
+           UpdateTime(pblock, pindexPrev);
+        pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, IsProofOfStake());
         pblock->nNonce         = 0;
         pblocktemplate->vTxSigOps[0] = GetLegacySigOpCount(pblock->vtx[0]);
 
@@ -405,6 +408,126 @@ bool ProcessBlockFound(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
         return error("NetcoinMiner : ProcessNewBlock, block not accepted");
 
     return true;
+}
+
+bool CheckStake(CBlock* pblock, CWallet& wallet)
+{
+    uint256 proofHash = 0, hashTarget = 0;
+    uint256 hashBlock = pblock->GetHash();
+
+    if(!pblock->IsProofOfStake())
+        return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex().c_str());
+
+    // verify hash target and signature of coinstake tx
+    if (!CheckProofOfStake(pblock->vtx[1], pblock->nTime, pblock->nBits, proofHash, hashTarget))
+        return error("CheckStake() : proof-of-stake checking failed");
+
+    //// debug print
+    printf("CheckStake() : new proof-of-stake block found  \n  hash: %s \nproofhash: %s  \ntarget: %s\n", hashBlock.GetHex().c_str(), proofHash.GetHex().c_str(), hashTarget.GetHex().c_str());
+    pblock->print();
+    printf("out %s\n", FormatMoney(pblock->vtx[1].GetValueOut()).c_str());
+
+    // Found a solution
+    {
+        LOCK(cs_main);
+        if (pblock->hashPrevBlock != hashBestChain)
+            return error("CheckStake() : generated block is stale");
+
+        // Track how many getdata requests this block gets
+        {
+            LOCK(wallet.cs_wallet);
+            wallet.mapRequestCount[hashBlock] = 0;
+        }
+
+        // Process this block the same as if we had received it from another node
+        CValidationState state;
+        if (!ProcessNewBlock(state, NULL, pblock))
+            return error("CheckStake() : ProcessBlock, block not accepted");
+    }
+
+    return true;
+}
+
+void StakeMiner(CWallet *pwallet)
+{
+
+    LogPrintf("NetcoinStakeMiner started\n");
+    SetThreadPriority(THREAD_PRIORITY_LOWEST);
+
+    // Make this thread recognisable as the mining thread
+    RenameThread("netcoin-stakeminer");
+
+    bool fTryToSync = true;
+
+    while (true)
+    {
+        if (fShutdown)
+            return;
+
+        while (pwallet->IsLocked())
+        {
+            nLastCoinStakeSearchInterval = 0;
+            MilliSleep(1000);
+            if (fShutdown)
+                return;
+        }
+
+        while (vNodes.empty() || IsInitialBlockDownload())
+        {
+            nLastCoinStakeSearchInterval = 0;
+            fTryToSync = true;
+            MilliSleep(1000);
+            if (fShutdown)
+                return;
+        }
+
+        if (fTryToSync)
+        {
+            fTryToSync = false;
+            if ((!fTestNet && vNodes.size() < 3) || nBestHeight < GetNumBlocksOfPeers())
+            {
+                MilliSleep(60000);
+                continue;
+            }
+        }
+
+        //netcoin - Wait until POS activation block height is reached
+        if (nBestHeight < (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET))
+        {
+            MilliSleep(60000);
+            continue;
+        }
+        //
+        // Create new block
+        //
+        int64_t nFees;
+
+        unsigned int nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
+        CBlockIndex* pindexPrev = chainActive.Tip();
+
+        auto_ptr<CBlockTemplate> pblocktemplate(CreateNewBloc(reservekey));
+        if (!pblocktemplate.get())
+        {
+            LogPrintf("Error in NetcoinMiner: Keypool ran out, please call keypoolrefill before restarting the mining thread\n");
+            return;
+        }
+        CBlock *pblock = &pblocktemplate->block;
+        IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+
+        LogPrintf("Running NetcoinMiner with %u transactions in block (%u bytes)\n", pblock->vtx.size(),
+            ::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
+
+        // Trying to sign a block
+        if (pblock->SignBlock(*pwallet, nFees))
+        {
+            SetThreadPriority(THREAD_PRIORITY_NORMAL);
+            CheckStake(pblock.get(), *pwallet);
+            SetThreadPriority(THREAD_PRIORITY_LOWEST);
+            MilliSleep(500);
+        }
+        else
+            MilliSleep(nMinerSleep);
+    }
 }
 
 void static BitcoinMiner(CWallet *pwallet)
@@ -538,11 +661,14 @@ void static BitcoinMiner(CWallet *pwallet)
 void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads)
 {
     static boost::thread_group* minerThreads = NULL;
+    static boost::thread_group* stakeThreads = NULL;
 
     if (nThreads < 0) {
         // In regtest threads defaults to 1
         if (Params().DefaultMinerThreads())
             nThreads = Params().DefaultMinerThreads();
+        if (Params().DefaultStakeMinerThreads())
+                    nThreads = Params().DefaultStakeMinerThreads();
         else
             nThreads = boost::thread::hardware_concurrency();
     }
@@ -554,12 +680,21 @@ void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads)
         minerThreads = NULL;
     }
 
+    if (stakeThreads != NULL)
+    {
+        stakeThreads->interrupt_all();
+        delete stakeThreads;
+        stakeThreads = NULL;
+    }
+
     if (nThreads == 0 || !fGenerate)
         return;
 
     minerThreads = new boost::thread_group();
+    stakeThreads = new boost::thread_group();
     for (int i = 0; i < nThreads; i++)
         minerThreads->create_thread(boost::bind(&BitcoinMiner, pwallet));
+        minerThreads->create_thread(boost::bind(&StakeMiner, pwallet));
 }
 
 #endif // ENABLE_WALLET

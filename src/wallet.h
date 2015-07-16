@@ -403,6 +403,7 @@ public:
     }
 
     bool SetDefaultKey(const CPubKey &vchPubKey);
+    void DisableTransaction(const CTransaction &tx);
 
     //! signify that a particular wallet feature is now used. this may change nWalletVersion and nWalletMaxVersion if those are lower
     bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = NULL, bool fExplicit = false);

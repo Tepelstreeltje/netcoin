@@ -123,8 +123,12 @@ public:
         nRejectBlockOutdatedMajority = 950;
         nToCheckBlockUpgradeMajority = 1000;
         nMinerThreads = 0;
+        nStakeMinerThreads =0;
         nTargetTimespan = 60 * 60; // 60 Minutes
         nTargetSpacing = 60;   // 60 Seconds
+        nStakeTargetSpacing = 2 * 60; // NetCoin: 60 sec
+        nCoinbaseMaturity = 10;
+        nCoinStakeMaturity = 50;
 
         /**
          * Build the genesis block. Note that the output of the genesis coinbase cannot
@@ -201,8 +205,9 @@ public:
         nRejectBlockOutdatedMajority = 75;
         nToCheckBlockUpgradeMajority = 100;
         nMinerThreads = 0;
+        nStakeMinerThreads =0;
         nTargetTimespan = 3.5 * 24 * 60 * 60; // 3.5 days
-        nTargetSpacing = 2.5 * 60; // 2.5 minutes
+        nTargetSpacing = 1 * 60; // 1 minute
 
         //! Modify the testnet genesis block so the timestamp is valid for a later start.
         genesis.nTime = 1317798646;
@@ -256,6 +261,7 @@ public:
         nRejectBlockOutdatedMajority = 950;
         nToCheckBlockUpgradeMajority = 1000;
         nMinerThreads = 1;
+        nStakeMinerThreads =1;
         nTargetTimespan = 3.5 * 24 * 60 * 60; // 3.5 days
         nTargetSpacing = 2.5 * 60; // 2.5 minutes
         bnProofOfWorkLimit = ~uint256(0) >> 1;

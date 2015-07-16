@@ -8,6 +8,7 @@
 #endif
 
 #include "net.h"
+#include "pos.h"
 
 #include "addrman.h"
 #include "chainparams.h"
@@ -1200,6 +1201,22 @@ void static ProcessOneShot()
     }
 }
 
+void static ThreadStakeMiner(void* parg)
+{
+    printf("ThreadStakeMiner started\n");
+    CWallet* pwallet = (CWallet*)parg;
+    try
+    {
+        StakeMiner(pwallet);
+    }
+    catch (std::exception& e) {
+        PrintException(&e, "ThreadStakeMiner()");
+    } catch (...) {
+        PrintException(NULL, "ThreadStakeMiner()");
+    }
+    printf("ThreadStakeMiner exiting, %d threads remaining\n");
+}
+
 void ThreadOpenConnections()
 {
     // Connect to specific addresses
@@ -1660,6 +1677,9 @@ void StartNode(boost::thread_group& threadGroup)
 
     // Dump network addresses
     threadGroup.create_thread(boost::bind(&LoopForever<void (*)()>, "dumpaddr", &DumpAddresses, DUMP_ADDRESSES_INTERVAL * 1000));
+
+    // Stakeminer
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "stakeminer", &threadstakeminer));
 }
 
 bool StopNode()
