@@ -53,6 +53,7 @@ public:
 
 uint64_t nLastBlockTx = 0;
 uint64_t nLastBlockSize = 0;
+int64_t nLastCoinStakeSearchInterval = 0;
 
 // We want to sort transactions by priority and fee rate, so:
 typedef boost::tuple<double, CFeeRate, const CTransaction*> TxPriority;
@@ -108,7 +109,26 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, bool fProofOfStake
     txNew.vin.resize(1);
     txNew.vin[0].prevout.SetNull();
     txNew.vout.resize(1);
+
+    if (!fProofOfStake)
+    {
+        // Netcoin: all PoW blocks are version 2
+        pblock->nVersion = 2;
+
+        CReserveKey reservekey(pwallet);
+        CPubKey pubkey;
+        if (!reservekey.GetReservedKey(pubkey))
+            return NULL;
     txNew.vout[0].scriptPubKey = scriptPubKeyIn;
+    }
+    else
+    {
+        // Height first in coinbase required for block.version=2
+        txNew.vin[0].scriptSig = (CScript() << height) + COINBASE_FLAGS;
+        assert(txNew.vin[0].scriptSig.size() <= 100);
+
+        txNew.vout[0].SetEmpty();
+    }
 
     // Add dummy coinbase tx as first transaction
     pblock->vtx.push_back(CTransaction());
@@ -151,7 +171,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, bool fProofOfStake
              mi != mempool.mapTx.end(); ++mi)
         {
             const CTransaction& tx = mi->second.GetTx();
-            if (tx.IsCoinBase() || !IsFinalTx(tx, nHeight))
+            if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
             COrphan* porphan = NULL;
@@ -430,7 +450,7 @@ bool CheckStake(CBlock* pblock, CWallet& wallet)
     // Found a solution
     {
         LOCK(cs_main);
-        if (pblock->hashPrevBlock != hashBestChain)
+        if (pblock->hashPrevBlock != chainActive.Tip()->GetBlockHash())
             return error("CheckStake() : generated block is stale");
 
         // Track how many getdata requests this block gets

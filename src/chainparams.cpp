@@ -8,6 +8,8 @@
 #include "random.h"
 #include "util.h"
 #include "utilstrencodings.h"
+#include "crypto/scrypt.h"
+#include "chain.h"
 
 #include <assert.h>
 
@@ -140,7 +142,7 @@ public:
          *     CTxOut(nValue=50.00000000, scriptPubKey=0x5F1DF16B2B704C8A578D0B)
          *   vMerkleTree: 4a5e1e
          */
-        const char* pszTimestamp = "Aug 31, 2013: US STOCKS-Wall Street falls, ends worst month since May 2012.";
+        const char* pszTimestamp = "July 17 blablabla not much to report today.";
         CMutableTransaction txNew;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
@@ -155,6 +157,44 @@ public:
         genesis.nTime    = 1377903314;
         genesis.nBits    = 0x1e0ffff0;
         genesis.nNonce   = 12344321;
+
+        //// debug print
+
+
+
+        LogPrintf("block.GetHash() = %s\n", block.GetHash().ToString().c_str());
+        LogPrintf("block.hashMerkleRoot = %s\n", block.hashMerkleRoot.ToString().c_str());
+
+        // If genesis block hash does not match, then generate new genesis hash.
+        if (true && genesis.GetHash() != hashGenesisBlock)
+        {
+            printf("Searching for genesis block...\n");
+            // This will figure out a valid hash and Nonce if you're
+            // creating a different genesis block:
+            uint256 hashTarget = uint256().SetCompact(genesis.nBits);
+            uint256 thash;
+            char scratchpad[SCRYPT_SCRATCHPAD_SIZE];
+
+            while(true)
+            {
+                scrypt_1024_1_1_256_sp(BEGIN(genesis.nVersion), BEGIN(thash), scratchpad);
+                if (thash <= hashTarget)
+                    break;
+                if ((genesis.nNonce & 0xFFF) == 0)
+                {
+                    LogPrintf("nonce %08X: hash = %s (target = %s)\n", genesis.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
+                }
+                ++block.nNonce;
+                if (genesis.nNonce == 0)
+                {
+                    printf("NONCE WRAPPED, incrementing time\n");
+                    ++genesis.nTime;
+                }
+            }
+
+            LogPrintf("block.GetHash = %s\n", genesis.GetHash().ToString().c_str());
+        }
+
 
         hashGenesisBlock = genesis.GetHash();
         assert(hashGenesisBlock == uint256("0x38624e3834cfdc4410a5acbc32f750171aadad9620e6ba6d5c73201c16f7c8d1"));

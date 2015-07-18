@@ -269,13 +269,13 @@ bool CheckStakeKernelHash(unsigned int nBits, const CBlock& blockFrom, unsigned 
     if (nTimeBlockFrom + nStakeMinAge > nTimeTx) // Min age requirement
         return error("CheckStakeKernelHash() : min age violation");
 
-    CBigNum bnTargetPerCoinDay;
+    uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
     int64_t nValueIn = txPrev.vout[prevout.n].nValue;
 
     uint256 hashBlockFrom = blockFrom.GetHash();
 
-    CBigNum bnCoinDayWeight = CBigNum(nValueIn) * GetWeight((int64_t)nTimeBlockFrom, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
+    uint256 bnCoinDayWeight = uint256(nValueIn) * GetWeight((int64_t)nTimeBlockFrom, (int64_t)nTimeTx) / COIN / (24 * 60 * 60);
     targetProofOfStake = (bnCoinDayWeight * bnTargetPerCoinDay).getuint256();
 
     // Calculate hash
@@ -304,7 +304,7 @@ bool CheckStakeKernelHash(unsigned int nBits, const CBlock& blockFrom, unsigned 
     }
 
     // Now check if proof-of-stake hash meets target protocol
-    if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
+    if (uint256(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
         return false;
     if (fDebug && !fPrintProofOfStake)
     {
@@ -342,7 +342,7 @@ bool CheckProofOfStake(const CTransaction& tx, unsigned int txTime, unsigned int
         return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
 
     // Read block header
-    CBlock block;
+    CBlockUndo block;
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
 

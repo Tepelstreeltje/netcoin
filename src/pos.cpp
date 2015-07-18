@@ -3,12 +3,84 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <pos.h>
+#include "chain.h"
+#include "chainparams.h"
+#include "timedata.h"
+#include "wallet.h"
+#include "main.h"
+#include "ecwrapper.h"
 
-
+unsigned int nStakeMinAge = 1 * 60 * 60; // 1 hour
+unsigned int nStakeMaxAge = 2592000; // 30 days
 
 bnProofOfStakeLimit(~uint256(0) >> 20);
 
-unsigned int ComputeMaxBits(CBigNum bnTargetLimit, unsigned int nBase, int64_t nTime)
+// Netcoin: PERSONALISED INTEREST RATE CALCULATION
+// madprofezzor@gmail.com
+
+// returns an integer between 0 and PIR_PHASES-1 representing which PIR phase the supplied block height falls into
+int GetPIRRewardPhase(int64_t nHeight)
+{
+   int64_t Phase0StartHeight = (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET);
+   int phase = (int)( (nHeight-Phase0StartHeight) / PIR_PHASEBLOCKS);
+   return min(PIR_PHASES-1, max(0,phase) );
+}
+
+int64_t GetPIRRewardCoinYear(int64_t nCoinValue, int64_t nHeight)
+{
+    // work out which phase rates we should use, based on the block height
+    int nPhase = GetPIRRewardPhase(nHeight);
+
+    // find the % band that contains the staked value
+    if (nCoinValue >= PIR_THRESHOLDS[PIR_LEVELS-1] * COIN)
+        return PIR_RATES[nPhase][PIR_LEVELS-1]  * CENT;
+
+    int nLevel = 0;
+    for (int i = 1; i<PIR_LEVELS; i++)
+    {
+        if (nCoinValue < PIR_THRESHOLDS[i] * COIN)
+        {
+                nLevel = i-1;
+                break;
+        };
+    };
+
+
+    // interpolate the PIR for this staked value
+    // a simple way to interpolate this using integer math is to break the range into 100 slices and find the slice where our coin value lies
+    // Rates and Thresholds are integers, CENT and COIN are multiples of 100, so using 100 slices does not introduce any integer math rounding errors
+
+
+    int64_t nLevelRatePerSlice = (( PIR_RATES[nPhase][nLevel+1] - PIR_RATES[nPhase][nLevel] ) * CENT )  / 100;
+    int64_t nLevelValuePerSlice = (( PIR_THRESHOLDS[nLevel+1] - PIR_THRESHOLDS[nLevel] ) * COIN ) / 100;
+
+    int64_t nTestValue = PIR_THRESHOLDS[nLevel] * COIN;
+
+    int64_t nRewardCoinYear = PIR_RATES[nPhase][nLevel] * CENT;
+    while (nTestValue < nCoinValue)
+    {
+        nTestValue += nLevelValuePerSlice;
+        nRewardCoinYear += nLevelRatePerSlice;
+    };
+
+    return nRewardCoinYear;
+
+}
+
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue,  int64_t nFees, int64_t nHeight)
+{
+
+    int64_t nRewardCoinYear = GetPIRRewardCoinYear(nCoinValue, nHeight);
+
+    int64_t nSubsidy = nCoinAge * nRewardCoinYear * 33 / (365 * 33 + 8); //integer equivalent of nCoinAge * nRewardCoinYear / 365.2424242..
+
+    if (fDebug && GetBoolArg("-printcreation"))
+        printf("GetProofOfStakeReward(): PIR=%.1f create=%s nCoinAge=%"PRI64d" nCoinValue=%s nFees=%"PRI64d"\n", (double)nRewardCoinYear/(double)CENT, FormatMoney(nSubsidy).c_str(), nCoinAge, FormatMoney(nCoinValue).c_str(), nFees);
+
+    return nSubsidy + nFees;
+}
+
+unsigned int ComputeMaxBits(uint256 bnTargetLimit, unsigned int nBase, int64_t nTime)
 {
     // Testnet has min-difficulty blocks
     // after nTargetSpacing*2 time between blocks:
@@ -71,7 +143,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 hashMerkleRoot = BuildMerkleTree();
 
                 // append a signature to our block
-                return key.Sign(GetHash(), vchBlockSig);
+                return key.Sign(GetHash(), CBlockIndex.vchBlockSig);
             }
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
@@ -80,6 +152,8 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
 
     return false;
 }
+
+
 
 //netcoin - fresh coins age faster than older coins
 // madprofezzor@gmail.com (who)
@@ -127,7 +201,7 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool CTransaction::GetCoinAge(CTxDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
+bool CTransaction::GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
 {
     CBigNum bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
@@ -180,7 +254,7 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
 {
     nCoinAge = 0;
 
-    CTxDB txdb("r");
+    CBlockTreeDB txdb("r");
     BOOST_FOREACH(const CTransaction& tx, vtx)
     {
         uint64_t nTxCoinAge;

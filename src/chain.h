@@ -7,6 +7,7 @@
 #define BITCOIN_CHAIN_H
 
 #define PRI64x  "I64x"
+#define PRI64d  "I64d"
 
 #include "primitives/block.h"
 #include "pow.h"
@@ -156,12 +157,11 @@ public:
     unsigned int nStakeTime;
     uint256 hashProof;
 
-    //!block signature - signed by one of the coin base txout[N]'s owner
+    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
     std::vector<unsigned char> vchBlockSig;
 
     //! block header
     int nVersion;
-    int nversionPOS;
     uint256 hashMerkleRoot;
     unsigned int nTime;
     unsigned int nBits;
@@ -228,7 +228,7 @@ public:
         nStakeTime = 0;
         hashProof = 0;
 
-        if (block.IsProofOfStake())
+        if (IsProofOfStake())
         {
             SetProofOfStake();
             prevoutStake = block.vtx[1].vin[0].prevout;
@@ -431,6 +431,12 @@ public:
         READWRITE(VARINT(nHeight));
         READWRITE(VARINT(nStatus));
         READWRITE(VARINT(nTx));
+
+        // BlockSig only in block version 3
+        // due to the transition from PoW to PoS
+        if(nVersion >= 3)
+          READWRITE(vchBlockSig);
+
         if (nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO))
             READWRITE(VARINT(nFile));
         if (nStatus & BLOCK_HAVE_DATA)
@@ -438,9 +444,6 @@ public:
         if (nStatus & BLOCK_HAVE_UNDO)
             READWRITE(VARINT(nUndoPos));
 
-        if (nVersion>=BLOCKINDEX_VERSION_POS){
-            READWRITE(nMint);
-            READWRITE(nMoneySupply);
             READWRITE(nFlags);
             READWRITE(nStakeModifier);
             if (IsProofOfStake())

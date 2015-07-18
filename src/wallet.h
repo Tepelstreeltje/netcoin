@@ -17,6 +17,11 @@
 #include "wallet_ismine.h"
 #include "walletdb.h"
 
+#include "pos.h"
+#include "kernel.h"
+#include "chainparams.h"
+#include "txdb.h"
+
 #include <algorithm>
 #include <map>
 #include <set>
@@ -111,6 +116,7 @@ class CWallet : public CCryptoKeyStore, public CValidationInterface
 {
 private:
     bool SelectCoins(const CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, const CCoinControl *coinControl = NULL) const;
+    bool SelectCoinsSimple(int64_t nTargetValue, int nMinConf, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     CWalletDB *pwalletdbEncryption;
 
@@ -122,6 +128,8 @@ private:
 
     int64_t nNextResend;
     int64_t nLastResend;
+
+    int64_t nReserveBalance;
 
     /**
      * Used to keep track of spent outpoints, and
@@ -185,6 +193,7 @@ public:
         nNextResend = 0;
         nLastResend = 0;
         nTimeFirstKey = 0;
+        nReserveBalance = 0;
     }
 
     std::map<uint256, CWalletTx> mapWallet;
@@ -207,6 +216,8 @@ public:
 
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl = NULL) const;
     bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
+
+    void AvailableCoinsMinConf(std::vector<COutput>& vCoins, int nConf) const;
 
     bool IsSpent(const uint256& hash, unsigned int n) const;
 
@@ -293,6 +304,10 @@ public:
     bool CreateTransaction(CScript scriptPubKey, const CAmount& nValue,
                            CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, std::string& strTxComment, const CCoinControl *coinControl = NULL);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
+
+    bool GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight);
+    bool CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, unsigned int& nTxTime, CKey& key);
+    int64_t GetStake() const;
 
     static CFeeRate minTxFee;
     static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
@@ -740,7 +755,7 @@ public:
     CAmount GetCredit(const isminefilter& filter) const
     {
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() && GetBlocksToMaturity() > 0)
+        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         int64_t credit = 0;
@@ -772,7 +787,7 @@ public:
 
     CAmount GetImmatureCredit(bool fUseCache=true) const
     {
-        if (IsCoinBase() && GetBlocksToMaturity() > 0 && IsInMainChain())
+        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
         {
             if (fUseCache && fImmatureCreditCached)
                 return nImmatureCreditCached;
@@ -790,7 +805,7 @@ public:
             return 0;
 
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() && GetBlocksToMaturity() > 0)
+        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         if (fUseCache && fAvailableCreditCached)
@@ -816,7 +831,7 @@ public:
 
     CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const
     {
-        if (IsCoinBase() && GetBlocksToMaturity() > 0 && IsInMainChain())
+        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
         {
             if (fUseCache && fImmatureWatchCreditCached)
                 return nImmatureWatchCreditCached;
@@ -834,7 +849,7 @@ public:
             return 0;
 
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() && GetBlocksToMaturity() > 0)
+        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         if (fUseCache && fAvailableWatchCreditCached)

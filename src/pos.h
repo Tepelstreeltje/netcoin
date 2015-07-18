@@ -8,10 +8,19 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "timedata.h"
+#include "wallet.h"
+#include "main.h"
 
 class CWallet;
 
+extern unsigned int nStakeMinAge;
+extern unsigned int nStakeMaxAge;
+
 void StakeMiner(CWallet *pwallet);
+int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue, int64_t nFees, int64_t nHeight);
+int64_t GetPIRRewardCoinYear(int64_t nCoinValue, int64_t nHeight);
+
+
 
 // Netcoin PIR personal staking interest rate is organised into percentage reward bands based on the value of the coins being staked
 // madprofezzor@gmail.com
@@ -63,16 +72,7 @@ unsigned int GetStakeEntropyBit() const
     return nEntropyBit;
 }
 
-// ppcoin: two types of block: proof-of-work or proof-of-stake
-bool IsProofOfStake() const
-{
-    return (vtx.size() > 1 && vtx[1].IsCoinStake());
-}
 
-bool IsProofOfWork() const
-{
-    return !IsProofOfStake();
-}
 
 std::pair<COutPoint, unsigned int> GetProofOfStake() const
 {

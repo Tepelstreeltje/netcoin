@@ -22,6 +22,7 @@
 #include "kernel.h"
 #include "db.h"
 #include "wallet.h"
+#include "chain.h"
 
 #include <sstream>
 
@@ -875,6 +876,8 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state)
     CAmount nValueOut = 0;
     BOOST_FOREACH(const CTxOut& txout, tx.vout)
     {
+        if (txout.IsEmpty() && !IsCoinBase() && !IsCoinStake())
+            return DoS(100, error("CTransaction::CheckTransaction() : txout empty for user transaction"));
         if (txout.nValue < 0)
             return state.DoS(100, error("CheckTransaction() : txout.nValue negative"),
                              REJECT_INVALID, "bad-txns-vout-negative");
@@ -959,6 +962,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         return state.DoS(100, error("AcceptToMemoryPool: : coinbase as individual tx"),
                          REJECT_INVALID, "coinbase");
 
+    // Coinstake is also only valid in a block, not as a loose transaction
+        if (tx.IsCoinStake())
+            return tx.DoS(100, error("CTxMemPool::accept() : coinstake as individual tx"));
+
     // Rather not work on nonstandard transactions (unless -testnet/-regtest)
     string reason;
     if (Params().RequireStandard() && !IsStandardTx(tx, reason))
@@ -1041,8 +1048,12 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                                    hash.ToString(), nSigOps, MAX_TX_SIGOPS),
                              REJECT_NONSTANDARD, "bad-txns-too-many-sigops");
 
+
+        CAmount nValueIn = view.GetValueIn();
         CAmount nValueOut = tx.GetValueOut();
         CAmount nFees = nValueIn-nValueOut;
+
+
         double dPriority = view.GetPriority(tx, chainActive.Height());
 
         CTxMemPoolEntry entry(tx, nFees, GetTime(), dPriority, chainActive.Height());
@@ -1231,7 +1242,7 @@ bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos)
     }
 
     // Check the header
-    if (IsProofOfWork() && !CheckProofOfWork(block.GetPoWHash(), block.nBits))
+    if (!CheckProofOfWork(block.GetHash(), block.nBits))
         return error("ReadBlockFromDisk : Errors in block header");
 
     return true;
@@ -1755,10 +1766,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                      REJECT_INVALID, "bad-blk-sigops");
             }
 
+            if (!tx.IsCoinStake())
             nFees += view.GetValueIn(tx)-tx.GetValueOut();
-
             if (tx.IsCoinStake())
-                nStakeReward = nTxValueOut - nTxValueIn;
+                nStakeReward = tx.GetValueOut() - view.GetValueIn(tx);
+
 
             std::vector<CScriptCheck> vChecks;
             if (!CheckInputs(tx, state, view, fScriptChecks, flags, false, nScriptCheckThreads ? &vChecks : NULL))
@@ -1785,6 +1797,17 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                          error("ConnectBlock() : coinbase pays too much (actual=%d vs limit=%d)",
                                block.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, nFees)),
                                REJECT_INVALID, "bad-cb-amount");
+        if (IsProofOfStake())
+        {
+            // ppcoin: coin stake tx earns reward instead of paying fee
+            uint64_t nCoinAge;
+            int64_t nCoinValue;
+
+            int64_t nCalculatedStakeReward = GetProofOfStakeReward(nCoinAge, nCoinValue, nFees, pindex->nHeight);
+
+            if (nStakeReward > nCalculatedStakeReward)
+                return DoS(100, error("ConnectBlock() : coinstake pays too much(actual=%"PRI64d" vs calculated=%"PRI64d")", nStakeReward, nCalculatedStakeReward));
+        }
 
     if (!control.Wait())
         return state.DoS(100, false);
@@ -2104,6 +2127,8 @@ static void PruneBlockIndexCandidates() {
     // Either the current tip or a successor of it we're working towards is left in setBlockIndexCandidates.
     assert(!setBlockIndexCandidates.empty());
 }
+
+
 
 /**
  * Try to make some progress towards making pindexMostWork the active block.
@@ -2702,6 +2727,8 @@ bool AcceptBlock(CBlock& block, CValidationState& state, CBlockIndex** ppindex, 
                 return state.Abort("Failed to write block");
         if (!ReceivedBlockTransactions(block, state, pindex, blockPos))
             return error("AcceptBlock() : ReceivedBlockTransactions failed");
+        if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
+            return error("AcceptBlock() : AddToBlockIndex failed");
     } catch(std::runtime_error &e) {
         return state.Abort(std::string("System error: ") + e.what());
     }
@@ -2776,21 +2803,71 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
     // Preliminary checks
     bool checked = CheckBlock(*pblock, state);
 
-    CBigNum bnNewBlock;
-    bnNewBlock.SetCompact(pblock->nBits);
-    CBigNum bnRequired;
+    // ppcoin: check proof-of-stake
+    // Limited duplicity on stake: prevents block flood attack
+    // Duplicate stake allowed only when there is orphan child block
 
-    if (pblock->IsProofOfStake())
-        bnRequired.SetCompact(ComputeMinStake(GetLastBlockIndex(pcheckpoint, true)->nBits, deltaTime, pblock->nTime));
+    uint256 hash = block.GetHash();
+    if (IsProofOfStake() && setStakeSeen.count(GetProofOfStake()) && !mapOrphanTransactionsByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), block.GetProofOfStake().second, hash.ToString().c_str());
+
+    CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint();
+    if (pcheckpoint && *block.hashPrevBlock != chainActive.Tip()->GetBlockHash() && !CCoinsViewCache::GetBestBlock(hash))
+
+        {
+            // Extra checks to prevent "fill up memory by spamming with bogus blocks"
+            int64_t deltaTime = block.GetBlockTime() - pcheckpoint->nTime;
+            if (deltaTime < 0)
+            {
+               Misbehaving(pfrom.GetId(), 100);
+                return error("ProcessBlock() : block with timestamp before last checkpoint");
+            }
+
+    uint256 bnNewBlock;
+    bnNewBlock.SetCompact(block.nBits);
+    uint256 bnRequired;
+
+    if (IsProofOfStake())
+        bnRequired.SetCompact(ComputeMinStake(CChain::SetTip(pcheckpoint, true) block.nBits, deltaTime, block.nTime));
     else
-        bnRequired.SetCompact(ComputeMinWork(GetLastBlockIndex(pcheckpoint, false)->nBits, deltaTime));
+        bnRequired.SetCompact(ComputeMinWork(CChain::SetTip(pcheckpoint, false)block.nBits, deltaTime));
 
     if (bnNewBlock > bnRequired)
     {
-        if (pfrom)
-            pfrom->Misbehaving(100);
-        return error("ProcessBlock() : block with too little %s", pblock->IsProofOfStake()? "proof-of-stake" : "proof-of-work");
+            Misbehaving(pfrom->GetId(), 100);
+        return error("ProcessBlock() : block with too little %s", IsProofOfStake()? "proof-of-stake" : "proof-of-work");
     }
+    // If don't already have its previous block, shunt it off to holding area until we get it
+    if (!mapBlockIndex.count(pblock->hashPrevBlock))
+    {
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
+        CBlock* pblock2 = new CBlock(*pblock);
+        // ppcoin: check proof-of-stake
+        if (pblock2-> IsProofOfStake())
+        {
+            // Limited duplicity on stake: prevents block flood attack
+            // Duplicate stake allowed only when there is orphan child block
+            if (setStakeSeenOrphan.count(pblock2->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock2->GetProofOfStake().first.ToString().c_str(), pblock2->GetProofOfStake().second, hash.ToString().c_str());
+            else
+                setStakeSeenOrphan.insert(pblock2->GetProofOfStake());
+        }
+        mapOrphanBlocks.insert(make_pair(hash, pblock2));
+        mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+
+        // Ask this guy to fill in what we're missing
+        if (pfrom)
+        {
+           pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+            // ppcoin: getblocks may not obtain the ancestor block rejected
+            // earlier by duplicate-stake check so we ask for it again directly
+            if (!IsInitialBlockDownload())
+                CNode::AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+        }
+        return true;
+    }
+
+
     {
         LOCK(cs_main);
         MarkBlockAsReceived(pblock->GetHash());
@@ -3829,6 +3906,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (pindex->GetBlockHash() == hashStop)
             {
                 LogPrint("net", "  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
+                // ppcoin: tell downloading node about the latest block if it's
+                // without risk being rejected due to stake connection check
+                if (hashStop != chainActive.Tip() && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
+                    pfrom->PushInventory(CInv(MSG_BLOCK, chainActive.Tip()));
                 break;
             }
             pfrom->PushInventory(CInv(MSG_BLOCK, pindex->GetBlockHash()));

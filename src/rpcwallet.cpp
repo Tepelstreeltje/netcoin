@@ -47,7 +47,7 @@ void WalletTxToJSON(const CWalletTx& wtx, Object& entry)
 {
     int confirms = wtx.GetDepthInMainChain();
     entry.push_back(Pair("confirmations", confirms));
-    if (wtx.IsCoinBase())
+    if (wtx.IsCoinBase() || wtx.IsCoinStake())
         entry.push_back(Pair("generated", true));
     if (confirms > 0)
     {
@@ -528,7 +528,7 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || !IsFinalTx(wtx))
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
             continue;
 
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
@@ -577,7 +577,7 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || !IsFinalTx(wtx))
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
             continue;
 
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
@@ -999,7 +999,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
     {
         const CWalletTx& wtx = (*it).second;
 
-        if (wtx.IsCoinBase() || !IsFinalTx(wtx))
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
             continue;
 
         int nDepth = wtx.GetDepthInMainChain();
@@ -1211,7 +1211,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     entry.push_back(Pair("involvesWatchonly", true));
                 entry.push_back(Pair("account", account));
                 MaybePushAddress(entry, r.destination);
-                if (wtx.IsCoinBase())
+                if (wtx.IsCoinBase() || wtx.IsCoinStake())
                 {
                     if (wtx.GetDepthInMainChain() < 1)
                         entry.push_back(Pair("category", "orphan"));

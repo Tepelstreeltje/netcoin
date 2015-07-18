@@ -205,7 +205,7 @@ const CTxOut &CCoinsViewCache::GetOutputFor(const CTxIn& input) const
 
 CAmount CCoinsViewCache::GetValueIn(const CTransaction& tx) const
 {
-    if (tx.IsCoinBase() || IsCoinStake())
+    if (tx.IsCoinBase() || tx.IsCoinStake())
         return 0;
 
     CAmount nResult = 0;
@@ -217,7 +217,7 @@ CAmount CCoinsViewCache::GetValueIn(const CTransaction& tx) const
 
 bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const
 {
-    if (!tx.IsCoinBase()) {
+    if (!tx.IsCoinBase() || !tx.IsCoinStake()) {
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
             const COutPoint &prevout = tx.vin[i].prevout;
             const CCoins* coins = AccessCoins(prevout.hash);
@@ -231,7 +231,7 @@ bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const
 
 double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight) const
 {
-    if (tx.IsCoinBase())
+    if (tx.IsCoinBase() || tx.IsCoinStake())
         return 0.0;
     double dResult = 0.0;
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
