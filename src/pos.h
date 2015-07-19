@@ -13,8 +13,13 @@
 
 class CWallet;
 
+
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
+extern int64_t nLastCoinStakeSearchInterval;
+
+inline int64_t PastDrift(int64_t nTime)   { return nTime - 10 * 60; } // up to 10 minutes from the past
+inline int64_t FutureDrift(int64_t nTime) { return nTime + 10 * 60; } // up to 10 minutes from the future
 
 void StakeMiner(CWallet *pwallet);
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue, int64_t nFees, int64_t nHeight);
@@ -57,10 +62,6 @@ uint256 inline GetProofOfStakeLimit(int nHeight, unsigned int nTime)
         return bnProofOfStakeLimit;
 }
 
-int64_t GetPastTimeLimit() const
-{
-    return GetMedianTimePast();
-}
 
 // entropy bit for stake modifier if chosen by modifier
 unsigned int GetStakeEntropyBit() const

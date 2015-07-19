@@ -6,7 +6,8 @@
 
 #include "kernel.h"
 #include "txdb.h"
-
+#include "script/sigcache.h"
+#include "chainparams.h"
 using namespace std;
 
 typedef std::map<int, unsigned int> MapModifierCheckpoints;
@@ -332,21 +333,21 @@ bool CheckProofOfStake(const CTransaction& tx, unsigned int txTime, unsigned int
 
     // First try finding the previous transaction in database
     CBlockTreeDB txdb("r");
-    CTransaction txPrev;
-    CTxIndex txindex;
-    if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+    CBlockUndo txPrev;
+    CDiskTxPos pos;
+    if (!txPrev.ReadFromDisk(pos.nPos, pindexBestHeader->GetBlockHash()))
         return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
 
     // Verify signature
-    if (!VerifySignature(txPrev, tx, 0, 0))
+    if (!SignatureHash( txPrev, tx, 0, 0))
         return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
 
     // Read block header
     CBlockUndo block;
-    if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+    if (!block.ReadFromDisk(pos. nPos,pindexBestHeader->GetBlockHash()))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
 
-    if (!CheckStakeKernelHash(nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, txTime, hashProofOfStake, targetProofOfStake, fDebug))
+    if (!CheckStakeKernelHash(nBits, block, pos.nPos, txPrev, txin.prevout, txTime, hashProofOfStake, targetProofOfStake, fDebug))
         return tx.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str())); // may occur during initial download or if behind on block chain sync
 
     return true;
@@ -362,7 +363,7 @@ bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx)
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
-    assert (pindex->pprev || pindex->GetBlockHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+    assert (pindex->pprev || pindex->GetBlockHash() == (Params().hashGenesisBlock));
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
     CDataStream ss(SER_GETHASH, 0);
     if (pindex->pprev)

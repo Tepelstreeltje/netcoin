@@ -8,9 +8,12 @@
 
 #include "key.h"
 #include "script/standard.h"
+#include "keystore.h"
 
 class CKeyStore;
 class CScript;
+
+bool CreateCoinStake(const CKeyStore& keystore , unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, unsigned int& nTxTime, CKey& key);
 
 /** IsMine() return codes */
 enum isminetype

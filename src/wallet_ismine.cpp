@@ -15,6 +15,10 @@
 
 using namespace std;
 
+unsigned int nStakeSplitAge = 0; // If you find a POS block with coins aged less than this, it assumes you are staking well over the nStakeCombineThreshold and are finding blocks too quickly (
+// ( probably have a very high value compared to the network). It will split the payout back to you into two blocks, to give other people a better chance to stake.
+int64_t nStakeCombineThreshold = 10000000 * COIN;   //When appending coins to submit as a POS block, no further coins are added if this total is achieved
+
 typedef vector<unsigned char> valtype;
 
 unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
@@ -93,7 +97,7 @@ isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
 
 bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CTransaction& txNew, unsigned int& nTxTime, CKey& key)
 {
-    CBlockIndex* pindexPrev = pindexBest;
+    CBlockIndex* pindexPrev = pindexBestHeader;
     uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
 
@@ -128,10 +132,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     CBlockTreeDB txdb("r");
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
-        CTxIndex txindex;
+        CDiskTxPos pos;
         {
             LOCK2(cs_main, cs_wallet);
-            if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
+            if (!txdb.ReadTxIndex(pcoin.first->GetHash(), pos))
                 continue;
         }
 
@@ -140,7 +144,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         CBlock blocks;
         {
             LOCK2(cs_main, cs_wallet);
-            if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+            if (!block.ReadFromDisk(pos.nPos,pindexBestHeader->GetBlockHash()  ))
                 continue;
         }
 
@@ -155,7 +159,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             uint256 hashProofOfStake = 0, targetProofOfStake = 0;
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            if (CheckStakeKernelHash(nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, *pcoin.first, prevoutStake, nTxTime - n, hashProofOfStake, targetProofOfStake))
+            if (CheckStakeKernelHash(nBits, block, pos. nTxPos - txindex.pos.nBlockPos, *pcoin.first, prevoutStake, nTxTime - n, hashProofOfStake, targetProofOfStake))
             {
                 // Found a kernel
                 if (fDebug && GetBoolArg("-printcoinstake"))
@@ -215,7 +219,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 vwtxPrev.push_back(pcoin.first);
                 txNew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
-                if (GetWeight(block.GetBlockTime(), (int64_t)nTxTime) < nStakeSplitAge)
+                if (GetWeight(blocks.GetBlockTime(), (int64_t)nTxTime) < nStakeSplitAge)
                     txNew.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
                 if (fDebug && GetBoolArg("-printcoinstake"))
                     printf("CreateCoinStake : added kernel type=%d\n", whichType);
@@ -238,15 +242,15 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         if (txNew.vout.size() == 2 && ((pcoin.first->vout[pcoin.second].scriptPubKey == scriptPubKeyKernel || pcoin.first->vout[pcoin.second].scriptPubKey == txNew.vout[1].scriptPubKey))
             && pcoin.first->GetHash() != txNew.vin[0].prevout.hash)
         {
-            CTxIndex txindex;
+            CDiskTxPos txindex;
             {
                 LOCK2(cs_main, cs_wallet);
                 if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
                     continue;
             }
 
-            CBlock blockTmp;
-            if (!blockTmp.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos))
+            //HELPZZZ
+            if (!blockTmp. ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos))
                 continue;
 
             int64_t nTimeWeight = GetWeight((int64_t)blockTmp.nTime, (int64_t)nTxTime);
@@ -278,7 +282,8 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         uint64_t nCoinAge;
         int64_t nCoinValue;
         CBlockTreeDB txdb("r");
-        if (!txNew.GetCoinAge(txdb, nTxTime, nCoinAge, nCoinValue))
+        CTransaction tx;
+        if (!GetCoinAge(txdb, nTxTime, nCoinAge, nCoinValue))
             return error("CreateCoinStake : failed to calculate coin age");
 
         int64_t nReward = GetProofOfStakeReward(nCoinAge, nCoinValue, nFees, pindexPrev->nHeight);

@@ -5,6 +5,7 @@
 
 #include "amount.h"
 #include "chainparams.h"
+#include "chain.h"
 #include "core_io.h"
 #include "init.h"
 #include "net.h"
@@ -247,11 +248,21 @@ Value getmininginfo(const Array& params, bool fHelp)
             + HelpExampleRpc("getmininginfo", "")
         );
 
-    Object obj;
+    Object obj, diff, weight;
     obj.push_back(Pair("blocks",           (int)chainActive.Height()));
     obj.push_back(Pair("currentblocksize", (uint64_t)nLastBlockSize));
     obj.push_back(Pair("currentblocktx",   (uint64_t)nLastBlockTx));
     obj.push_back(Pair("difficulty",       (double)GetDifficulty()));
+
+    diff.push_back(Pair("proof-of-stake",  GetDifficulty(chainActive.SetTip(pindexBestHeader, true))));
+    diff.push_back(Pair("search-interval", (int)nLastCoinStakeSearchInterval));
+    obj.push_back(Pair("netstakeweight",   GetPoSKernelPS()));
+    weight.push_back(Pair("minimum",       (uint64_t)nMinWeight));
+    weight.push_back(Pair("maximum",       (uint64_t)nMaxWeight));
+    weight.push_back(Pair("combined",      (uint64_t)nWeight));
+    obj.push_back(Pair("stakeweight",      weight));
+    obj.push_back(Pair("stakeinterest",    (uint64_t)GetPIRRewardCoinYear(pwalletMain->GetBalance(),nBestHeight)));
+
     obj.push_back(Pair("errors",           GetWarnings("statusbar")));
     obj.push_back(Pair("genproclimit",     (int)GetArg("-genproclimit", -1)));
     obj.push_back(Pair("networkhashps",    getnetworkhashps(params, false)));
@@ -522,7 +533,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
     // Update nTime
-    UpdateTime(pblock, pindexPrev);
+    //UpdateTime(pblock, pindexPrev);
+    pblock->nTime = max(pindexPrev->GetPastTimeLimit()+1, GetAdjustedTime());
     pblock->nNonce = 0;
 
     static const Array aCaps = boost::assign::list_of("proposal");
@@ -581,7 +593,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     result.push_back(Pair("coinbasevalue", (int64_t)pblock->vtx[0].vout[0].nValue));
     result.push_back(Pair("longpollid", chainActive.Tip()->GetBlockHash().GetHex() + i64tostr(nTransactionsUpdatedLast)));
     result.push_back(Pair("target", hashTarget.GetHex()));
-    result.push_back(Pair("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1));
+    result.push_back(Pair("mintime", (int64_t)pindexPrev->GetPastTimeLimit()+1));
     result.push_back(Pair("mutable", aMutable));
     result.push_back(Pair("noncerange", "00000000ffffffff"));
     result.push_back(Pair("sigoplimit", (int64_t)MAX_BLOCK_SIGOPS));

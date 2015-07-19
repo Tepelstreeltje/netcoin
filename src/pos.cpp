@@ -87,7 +87,7 @@ unsigned int ComputeMaxBits(uint256 bnTargetLimit, unsigned int nBase, int64_t n
     //if (fTestNet && nTime > TargetSpacing *2)
         //return bnTargetLimit.GetCompact();
 
-    CBigNum bnResult;
+    uint256 bnResult;
     bnResult.SetCompact(nBase);
     while (nTime > 0 && bnResult < bnTargetLimit)
     {
@@ -133,8 +133,8 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
     {
         if (wallet.CreateCoinStake(wallet, nBits, nSearchTime-nLastCoinStakeSearchTime, nFees, txCoinStake, nTxTime, key))
         {
-            if (nTime >= max(pindexBest->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime())))
-            {
+            if (nTime >= max(pindexBestHeader->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime())))
+            {block.
                 // Pandacoin: since I've had to get rid of CTransaction's nTime,
                 // it's no longer possible to alter the nTime to fit the past block drift
                 nTime = nTxTime;
@@ -143,7 +143,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 hashMerkleRoot = BuildMerkleTree();
 
                 // append a signature to our block
-                return key.Sign(GetHash(), CBlockIndex.vchBlockSig);
+                return key.Sign(GetHash(), pindexBestHeader->vchBlockSig);
             }
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
@@ -203,7 +203,7 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
 // age (trust score) of competing branches.
 bool CTransaction::GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
 {
-    CBigNum bnCentSecond = 0;  // coin age in the unit of cent-seconds
+    uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
     nCoinValue = 0;
 
@@ -234,15 +234,15 @@ printf("GetCoinAge::%s\n", ToString().c_str());
 
         uint64 nDilatedAge;
         if (ApplyTimeDilation(nPrevTime, nTxTime, nDilatedAge))
-           bnCentSecond += CBigNum(nValueIn) * nDilatedAge / CENT;
+           bnCentSecond += uint256(nValueIn) * nDilatedAge / CENT;
         else
-           bnCentSecond += CBigNum(nValueIn) * (nTxTime-nPrevTime) / CENT;
+           bnCentSecond += uint256(nValueIn) * (nTxTime-nPrevTime) / CENT;
 
         if (fDebug && GetBoolArg("-printcoinage"))
             printf("coin age nValueIn=%"PRI64d" nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTxTime - nPrevTime, bnCentSecond.ToString().c_str());
     }
 
-    CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
+    uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
     if (fDebug && GetBoolArg("-printcoinage"))
         printf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
     nCoinAge = bnCoinDay.getuint64();

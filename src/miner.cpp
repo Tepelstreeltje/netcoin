@@ -350,6 +350,8 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, bool fProofOfStake
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+        pblock->nTime          = max(pindexPrev->GetPastTimeLimit()+1, GetAdjustedTime());
+        pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime()));
         if (!fProofOfStake)
            UpdateTime(pblock, pindexPrev);
         pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, IsProofOfStake());
@@ -504,19 +506,19 @@ void StakeMiner(CWallet *pwallet)
         if (fTryToSync)
         {
             fTryToSync = false;
-            if ((!fTestNet && vNodes.size() < 3) || nBestHeight < GetNumBlocksOfPeers())
+            if ((vNodes.size() < 3) || nBestHeight < GetNumBlocksOfPeers())
             {
                 MilliSleep(60000);
                 continue;
             }
         }
 
-        //netcoin - Wait until POS activation block height is reached
-        if (nBestHeight < (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET))
-        {
-            MilliSleep(60000);
-            continue;
-        }
+        ////netcoin - Wait until POS activation block height is reached
+        //if (nBestHeight < (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET))
+        //{
+        //    MilliSleep(60000);
+       //     continue;
+       // }
         //
         // Create new block
         //

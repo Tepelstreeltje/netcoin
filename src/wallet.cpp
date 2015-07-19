@@ -15,6 +15,9 @@
 #include "timedata.h"
 #include "util.h"
 #include "utilmoneystr.h"
+#include "chain.h"
+
+
 
 #include <assert.h>
 
@@ -1652,7 +1655,7 @@ bool CWallet::GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, ui
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     int64_t nValueIn = 0;
 
-    if (!SelectCoinsSimple(nBalance - nReserveBalance, COINBASE_MATURITY + 20, setCoins, nValueIn))
+    if (!SelectCoinsSimple(nBalance - nReserveBalance, COINBASE_MATURITY, setCoins, nValueIn))
         return false;
 
     if (setCoins.empty())
@@ -1661,37 +1664,38 @@ bool CWallet::GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, ui
     CBlockTreeDB txdb ("r");
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
-        CBlockIndex txindex;
 
+        CDiskTxPos pos;
+        CBlockIndex post;
+        CBlockUndo blockTmp;
         {
             LOCK2(cs_main, cs_wallet);
-            if (txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
+            if (txdb.ReadTxIndex(pcoin.first->GetHash(), pos))
                 continue;
         }
 
-        CBlockUndo blockTmp;
-        if (!blockTmp.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos))
+        if (!blockTmp.ReadFromDisk(pos.nPos, pindexBestHeader->GetBlockHash()))
             continue;
 
-        int64_t nTimeWeight = GetWeight((int64_t)blockTmp.nTime, (int64_t)GetTime());
-        CBigNum bnCoinDayWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
+        int64_t nTimeWeight = GetWeight((int64_t) post.nTime, (int64_t)GetTime());
+        uint256 bnCoinDayWeight = uint256(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
 
         // Weight is greater than zero
         if (nTimeWeight > 0)
         {
-            nWeight += bnCoinDayWeight.getuint64();
+            nWeight += bnCoinDayWeight;
         }
 
         // Weight is greater than zero, but the maximum value isn't reached yet
         if (nTimeWeight > 0 && nTimeWeight < nStakeMaxAge)
         {
-            nMinWeight += bnCoinDayWeight.getuint64();
+            nMinWeight += bnCoinDayWeight;
         }
 
         // Maximum weight was reached
         if (nTimeWeight == nStakeMaxAge)
         {
-            nMaxWeight += bnCoinDayWeight.getuint64();
+            nMaxWeight += bnCoinDayWeight;
         }
     }
 

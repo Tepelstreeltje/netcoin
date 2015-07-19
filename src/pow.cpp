@@ -13,13 +13,15 @@
 
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, bool fProofOfStake)
 {
+    unsigned int nProofOfWorkLimit = Params().ProofOfWorkLimit().GetCompact();
+    uint256 nTargetLimit = !fProofOfStake ? nProofOfWorkLimit : GetProofOfStakeLimit(pindexLast->nHeight, pindexLast->nTime);
     if (!fProofOfStake)
     {
-    unsigned int nProofOfWorkLimit = Params().ProofOfWorkLimit().GetCompact();
+
 
     // Genesis block
     if (pindexLast == NULL)
-        return nProofOfWorkLimit;
+        return nTargetLimit.GetCompact();;
 
     // Only change once per interval
     if ((pindexLast->nHeight+1) % Params().Interval() != 0)
@@ -66,8 +68,8 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     bnNew *= nActualTimespan;
     bnNew /= Params().TargetTimespan();
 
-    if (bnNew > Params().ProofOfWorkLimit())
-        bnNew = Params().ProofOfWorkLimit();
+    if (bnNew > nTargetLimit)
+        bnNew = nTargetLimit;
 
     /// debug print
     LogPrintf("GetNextWorkRequired RETARGET\n");

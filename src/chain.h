@@ -11,6 +11,7 @@
 
 #include "primitives/block.h"
 #include "pow.h"
+#include "pos.h"
 #include "tinyformat.h"
 #include "uint256.h"
 
@@ -299,6 +300,11 @@ public:
         return (int64_t)nTime;
     }
 
+    int64_t GetPastTimeLimit() const
+    {
+        return GetMedianTimePast();
+    }
+
     enum { nMedianTimeSpan=11 };
 
     int64_t GetMedianTimePast() const
@@ -375,6 +381,9 @@ public:
             hashMerkleRoot.ToString().c_str(),
             GetBlockHash().ToString().c_str());
     }
+
+     bool GetCoinAge(CTxDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const;  // ppcoin: get transaction coin age
+     bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
 
     //! Check whether this block index entry is valid up to the passed validity level.
     bool IsValid(enum BlockStatus nUpTo = BLOCK_VALID_TRANSACTIONS) const
@@ -457,7 +466,7 @@ public:
                 const_cast<CDiskBlockIndex*>(this)->nStakeTime = 0;
             }
             READWRITE(hashProof);
-        }
+
 
         // block header
         READWRITE(this->nVersion);
@@ -466,9 +475,8 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
-        if (nVersion>=BLOCKINDEX_VERSION_POS){
-          READWRITE(blockHash);
-        }
+
+
     }
 
     uint256 GetBlockHash() const
