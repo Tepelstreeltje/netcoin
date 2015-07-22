@@ -206,26 +206,26 @@ public:
         SetNull();
     }
 
-    CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
+    CBlockIndex(unsigned int nFileIn, unsigned int nDataPosIn, CBlock& block)
     {
         phashBlock = NULL;
         pprev = NULL;
         pskip = NULL;
         nHeight = 0;
-        nFile = 0;
-        nDataPos = 0;
+        nFile = nFileIn;
+        nDataPos = nDataPosIn;
         nUndoPos = 0;
         nChainWork = 0;
         nTx = 0;
         nChainTx = 0;
         nStatus = 0;
         nSequenceId = 0;
+
         nMint = 0;
         nMoneySupply = 0;
         nFlags = 0;
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
-        prevoutStake.SetNull();
         nStakeTime = 0;
         hashProof = 0;
 
@@ -371,8 +371,8 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%"PRI64x", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
-            pprev, pnext, nFile, nBlockPos, nHeight,
+        return strprintf("CBlockIndex(nprev=%p, pskip=%p, nFile=%u, nDataPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%"PRI64x", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
+            pprev, pskip , nFile, nDataPos, nHeight,
             FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier, nStakeModifierChecksum,

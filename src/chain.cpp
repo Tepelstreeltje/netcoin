@@ -85,9 +85,10 @@ LogPrintf("GetCoinAge::%s\n", ToString().c_str());
         if (!txPrev.ReadFromDisk(pos.nPos, pindexBestHeader->GetBlockHash()))
             continue;  // previous transaction not in main chain
 
+        //Helpzzz ReadFromDisk
         // Read block header
-        CBlock block;
-        if (!block. ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+        CBlockIndex block;
+        if (!ReadFromDisk(block.nFile, block.nDataPos, false))
             return false; // unable to read block of previous transaction
 
         unsigned int nPrevTime = block.GetBlockTime();
@@ -110,7 +111,7 @@ LogPrintf("GetCoinAge::%s\n", ToString().c_str());
     uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
     if (fDebug && GetBoolArg("-printcoinage"))
         printf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
-    nCoinAge = bnCoinDay.getuint64();
+    nCoinAge = bnCoinDay;
     return true;
 }
 

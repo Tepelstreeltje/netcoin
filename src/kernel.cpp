@@ -224,7 +224,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
     // loop to find the stake modifier later by a selection interval
     while (nStakeModifierTime < pindexFrom->GetBlockTime() + nStakeModifierSelectionInterval)
     {
-        if (!pindex->pnext)
+        if (!pindex-> pskip)
         {   // reached best block; may happen if node is behind on block chain
             if (fPrintProofOfStake || (pindex->GetBlockTime() + nStakeMinAge - nStakeModifierSelectionInterval > GetAdjustedTime()))
                 return error("GetKernelStakeModifier() : reached best block %s at height %d from block %s",
@@ -232,7 +232,7 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
             else
                 return false;
         }
-        pindex = pindex->pnext;
+        pindex = pindex->pskip;
         if (pindex->GeneratedStakeModifier())
         {
             nStakeModifierHeight = pindex->nHeight;

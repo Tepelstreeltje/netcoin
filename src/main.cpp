@@ -59,6 +59,8 @@ bool fTxIndex = false;
 bool fIsBareMultisigStd = true;
 unsigned int nCoinCacheSize = 5000;
 
+set<pair<COutPoint, unsigned int> > setStakeSeen;
+
 
 /** Fees smaller than this (in satoshi) are considered zero fee (for relaying and mining) */
 CFeeRate minRelayTxFee = CFeeRate(1000);
@@ -2727,8 +2729,8 @@ bool AcceptBlock(CBlock& block, CValidationState& state, CBlockIndex** ppindex, 
                 return state.Abort("Failed to write block");
         if (!ReceivedBlockTransactions(block, state, pindex, blockPos))
             return error("AcceptBlock() : ReceivedBlockTransactions failed");
-        if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
-            return error("AcceptBlock() : AddToBlockIndex failed");
+        //if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
+           // return error("AcceptBlock() : AddToBlockIndex failed");
     } catch(std::runtime_error &e) {
         return state.Abort(std::string("System error: ") + e.what());
     }
@@ -2806,6 +2808,8 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
+
+    // Helpzzz mapOrphanTransactionsByPrev,mapOrphanBlocks,mapOrphanBlocksByPrev,PushGetBlocks
 
     uint256 hash = block.GetHash();
     if (IsProofOfStake() && setStakeSeen.count(GetProofOfStake()) && !mapOrphanTransactionsByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
