@@ -11,6 +11,7 @@
 #include "serialize.h"
 #include "uint256.h"
 
+
 /** An outpoint - a combination of a transaction hash and an index n into its vout */
 class COutPoint
 {
@@ -132,6 +133,17 @@ public:
         return (nValue == -1);
     }
 
+    void SetEmpty()
+    {
+        nValue = 0;
+        scriptPubKey.clear();
+    }
+
+    bool IsEmpty() const
+    {
+        return (nValue == 0 && scriptPubKey.empty());
+    }
+
     uint256 GetHash() const;
 
     bool IsDust(CFeeRate minRelayTxFee) const
@@ -160,6 +172,19 @@ public:
     }
 
     std::string ToString() const;
+
+    //std::string ToString() const
+   // {
+    //    if (IsEmpty()) return "CTxOut(empty)";
+    //    if (scriptPubKey.size() < 6)
+    //        return "CTxOut(error)";
+    //    return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue).c_str(), scriptPubKey.ToString().c_str());
+   // }
+
+   // void print() const
+    //{
+    //    LogPrintf("%s\n", ToString().c_str());
+    //}
 };
 
 struct CMutableTransaction;
@@ -230,8 +255,8 @@ public:
     unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const;
 
     bool IsCoinBase() const
-    {
-        return (vin.size() == 1 && vin[0].prevout.IsNull());
+        {
+            return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
     bool IsCoinStake() const

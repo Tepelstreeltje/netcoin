@@ -250,7 +250,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             }
 
             //HELPZZZ
-            if (!blockTmp. ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos))
+            CBlockIndex block;
+            CDiskBlockPos pos;
+            if (!pos.CDiskBlockPos(block.nFile, block.nDataPos))
                 continue;
 
             int64_t nTimeWeight = GetWeight((int64_t)blockTmp.nTime, (int64_t)nTxTime);
@@ -282,7 +284,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
         uint64_t nCoinAge;
         int64_t nCoinValue;
         CBlockTreeDB txdb("r");
-        CTransaction tx;
         if (!GetCoinAge(txdb, nTxTime, nCoinAge, nCoinValue))
             return error("CreateCoinStake : failed to calculate coin age");
 

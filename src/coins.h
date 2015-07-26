@@ -86,7 +86,7 @@ public:
     int nVersion;
 
     void FromTx(const CTransaction &tx, int nHeightIn) {
-        fCoinBase = tx.IsCoinBase() || tx.IsCoinStake();
+        fCoinBase = IsCoinBase() || tx.IsCoinStake();
         vout = tx.vout;
         nHeight = nHeightIn;
         nVersion = tx.nVersion;
@@ -150,6 +150,7 @@ public:
     bool IsCoinBase() const {
         return fCoinBase;
     }
+
 
     unsigned int GetSerializeSize(int nType, int nVersion) const {
         unsigned int nSize = 0;

@@ -16,11 +16,13 @@
 #include "ui_interface.h"
 #include "wallet_ismine.h"
 #include "walletdb.h"
+#include "coins.h"
 
 #include "pos.h"
 #include "kernel.h"
 #include "chainparams.h"
 #include "txdb.h"
+#include "utilstrencodings.h"
 
 #include <algorithm>
 #include <map>
@@ -58,6 +60,7 @@ class COutput;
 class CReserveKey;
 class CScript;
 class CWalletTx;
+class CTxMemPool;
 
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
@@ -226,6 +229,7 @@ public:
     void UnlockCoin(COutPoint& output);
     void UnlockAllCoins();
     void ListLockedCoins(std::vector<COutPoint>& vOutpts);
+    bool SignBlock(CWallet& keystore, int64_t nFees);
 
     /**
      * keystore implementation
@@ -345,13 +349,13 @@ public:
             throw std::runtime_error("CWallet::GetChange() : value out of range");
         return (IsChange(txout) ? txout.nValue : 0);
     }
-    bool IsMine(const CTransaction& tx) const
-    {
-        BOOST_FOREACH(const CTxOut& txout, tx.vout)
-            if (IsMine(txout))
-                return true;
-        return false;
-    }
+    bool IsMine(const CTransaction& tx) const;
+    //{
+      //  BOOST_FOREACH(CTxOut& txout, tx.vout)
+        //    if (IsMine(txout))
+        //        return true;
+       // return false;
+    // }
     /** should probably be renamed to IsRelevantToMe */
     bool IsFromMe(const CTransaction& tx) const
     {
@@ -752,10 +756,12 @@ public:
         return debit;
     }
 
+
+    CCoins td;
     CAmount GetCredit(const isminefilter& filter) const
     {
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
+        if (td.IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         int64_t credit = 0;
@@ -787,7 +793,7 @@ public:
 
     CAmount GetImmatureCredit(bool fUseCache=true) const
     {
-        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
+        if (td.IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
         {
             if (fUseCache && fImmatureCreditCached)
                 return nImmatureCreditCached;
@@ -805,7 +811,7 @@ public:
             return 0;
 
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
+        if (td.IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         if (fUseCache && fAvailableCreditCached)
@@ -831,7 +837,7 @@ public:
 
     CAmount GetImmatureWatchOnlyCredit(const bool& fUseCache=true) const
     {
-        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
+        if (td.IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0 && IsInMainChain())
         {
             if (fUseCache && fImmatureWatchCreditCached)
                 return nImmatureWatchCreditCached;
@@ -849,7 +855,7 @@ public:
             return 0;
 
         // Must wait until coinbase is safely deep enough in the chain before valuing it
-        if (IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
+        if (td.IsCoinBase() || IsCoinStake() && GetBlocksToMaturity() > 0)
             return 0;
 
         if (fUseCache && fAvailableWatchCreditCached)
@@ -895,8 +901,8 @@ public:
     bool IsTrusted() const
     {
         // Quick answer in most cases
-        if (!IsFinalTx(*this))
-            return false;
+        //if (!IsFinalTx(*this))
+            //return false;
         int nDepth = GetDepthInMainChain();
         if (nDepth >= 1)
             return true;

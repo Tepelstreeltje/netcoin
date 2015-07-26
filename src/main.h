@@ -18,7 +18,7 @@
 #include "primitives/transaction.h"
 #include "net.h"
 #include "pow.h"
-#include "pos.h"
+//#include "pos.h"
 #include "script/script.h"
 #include "script/sigcache.h"
 #include "script/standard.h"
@@ -27,7 +27,6 @@
 #include "txmempool.h"
 #include "uint256.h"
 #include "undo.h"
-#include "test/bignum.h"
 
 #include <algorithm>
 #include <exception>
@@ -311,16 +310,26 @@ class CBlockUndo
 {
 public:
     std::vector<CTxUndo> vtxundo; // for all but the coinbase
+    std::vector<CTransaction> vtx;
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(vtxundo);
+        READWRITE(vtx);
     }
 
     bool WriteToDisk(CDiskBlockPos &pos, const uint256 &hashBlock);
     bool ReadFromDisk(const CDiskBlockPos &pos, const uint256 &hashBlock);
+    bool GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const;  // ppcoin: get transaction coin age
+
+    std::pair<COutPoint, unsigned int> GetProofOfStake() const
+    {
+        CBlockIndex block;
+        return block.IsProofOfStake()? std::make_pair(vtx[1].vin[0].prevout, block.nTime) : std::make_pair(COutPoint(), (unsigned int)0);
+    }
+
 };
 
 

@@ -74,7 +74,6 @@ public:
     int64_t Interval() const { return nTargetTimespan / nTargetSpacing; }
     int64_t CoinbaseMaturity () const{return nCoinbaseMaturity; }
     int64_t CoinStakeMaturity () const{return nCoinStakeMaturity; }
-
     /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
     bool MineBlocksOnDemand() const { return fMineBlocksOnDemand; }
     /** In the future use NetworkIDString() for RPC fields */

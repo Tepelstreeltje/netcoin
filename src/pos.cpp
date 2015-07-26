@@ -9,6 +9,9 @@
 #include "wallet.h"
 #include "main.h"
 #include "ecwrapper.h"
+#include "primitives/transaction.h"
+
+using namespace std;
 
 unsigned int nStakeMinAge = 1 * 60 * 60; // 1 hour
 unsigned int nStakeMaxAge = 2592000; // 30 days
@@ -110,16 +113,18 @@ unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBl
 }
 
 // attempt to generate suitable proof-of-stake
-bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
+bool CWallet::SignBlock(CWallet& wallet, int64_t nFees)
 {
+    CBlock vtx;
     // if we are trying to sign
     //    something except proof-of-stake block template
-    if (!vtx[0].vout[0].IsEmpty())
+    if (!vtx.vtx[0].vout[0].IsEmpty())
         return false;
 
     // if we are trying to sign
     //    a complete proof-of-stake block
-    if (IsProofOfStake())
+    CBlockIndex block;
+    if (block.IsProofOfStake())
         return true;
 
     static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
@@ -139,11 +144,11 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
                 // it's no longer possible to alter the nTime to fit the past block drift
                 nTime = nTxTime;
 
-                vtx.insert(vtx.begin() + 1, txCoinStake);
+                vtx.vtx.insert(vtx.vtx.begin() + 1, txCoinStake);
                 hashMerkleRoot = BuildMerkleTree();
 
                 // append a signature to our block
-                return key.Sign(GetHash(), pindexBestHeader->vchBlockSig);
+                return key.Sign(vtx.GetHash(), pindexBestHeader->vchBlockSig);
             }
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
@@ -172,8 +177,8 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
         nDilatedCoinAge = secondsAtFullReward +
                 (uint64)((1.0 / timeDilationCoeff) * (1.0 - exp(-timeDilationCoeff * (double)(timeStaked - timeDilationStarts))));
 
-        if (fDebug && GetBoolArg("-printcoinage"))
-            printf("staked coins are %.3f days old. POS reward reduces by %.3f percent",
+        if (fDebug && GetBoolArg("-printcoinage", true))
+            LogPrintf("staked coins are %.3f days old. POS reward reduces by %.3f percent",
                    (double)(timeStaked-timeReceived)/(24.0*60.0*60.0),
                    100.0 - (double)(nDilatedCoinAge * 100.0) / (double)(timeStaked-timeReceived)
                    );
@@ -184,8 +189,8 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
     }
     else
     {
-        if (fDebug && GetBoolArg("-printcoinage"))
-            printf("staked coins are younger than live wallet reward target. full coinage applies to reward");
+        if (fDebug && GetBoolArg("-printcoinage", true))
+            LogPrintf("staked coins are younger than live wallet reward target. full coinage applies to reward");
 
         nDilatedCoinAge = max((timeStaked-timeReceived),(uint64)0);
         return false;
@@ -201,7 +206,7 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool CTransaction::GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
+bool CBlockUndo::GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
 {
     uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
@@ -214,15 +219,17 @@ printf("GetCoinAge::%s\n", ToString().c_str());
 
     BOOST_FOREACH(const CTxIn& txin, vin)
     {
+        //Helpzzz ReadFromDisk
         // First try finding the previous transaction in database
-        CTransaction txPrev;
-        CTxIndex txindex;
-        if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
-            continue;  // previous transaction not in main chain
+       // CTransaction txPrev;
+        //CTxIndex txindex;
+       // if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+         //   continue;  // previous transaction not in main chain
 
         // Read block header
-        CBlock block;
-        if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+        CBlockIndex block;
+        CDiskBlockPos pos;
+        if (!pos.CDiskBlockPos(block.nFile, block.nDataPos))
             return false; // unable to read block of previous transaction
 
         unsigned int nPrevTime = block.GetBlockTime();
@@ -238,19 +245,19 @@ printf("GetCoinAge::%s\n", ToString().c_str());
         else
            bnCentSecond += uint256(nValueIn) * (nTxTime-nPrevTime) / CENT;
 
-        if (fDebug && GetBoolArg("-printcoinage"))
-            printf("coin age nValueIn=%"PRI64d" nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTxTime - nPrevTime, bnCentSecond.ToString().c_str());
+        if (fDebug && GetBoolArg("-printcoinage", true))
+            LogPrintf("coin age nValueIn=%"PRI64d" nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTxTime - nPrevTime, bnCentSecond.ToString().c_str());
     }
 
     uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
-    if (fDebug && GetBoolArg("-printcoinage"))
-        printf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
-    nCoinAge = bnCoinDay.getuint64();
+    if (fDebug && GetBoolArg("-printcoinage", true))
+        LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
+    nCoinAge = bnCoinDay;
     return true;
 }
 
 // ppcoin: total coin age spent in block, in the unit of coin-days.
-bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
+bool CBlockIndex::GetCoinAge(uint64_t& nCoinAge) const
 {
     nCoinAge = 0;
 
@@ -267,8 +274,8 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
 
     if (nCoinAge == 0) // block coin age minimum 1 coin-day
         nCoinAge = 1;
-    if (fDebug && GetBoolArg("-printcoinage"))
-        printf("block coin age total nCoinDays=%"PRI64d"\n", nCoinAge);
+    if (fDebug && GetBoolArg("-printcoinage", true))
+        LogPrintf("block coin age total nCoinDays=%"PRI64d"\n", nCoinAge);
     return true;
 }
 

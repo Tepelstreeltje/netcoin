@@ -11,7 +11,7 @@
 
 #include "primitives/block.h"
 #include "pow.h"
-#include "pos.h"
+//#include "pos.h"
 #include "tinyformat.h"
 #include "uint256.h"
 
@@ -19,6 +19,8 @@
 #include <vector>
 
 #include <boost/foreach.hpp>
+
+CBlock cb;
 
 struct CDiskBlockPos
 {
@@ -157,9 +159,6 @@ public:
     COutPoint prevoutStake;
     unsigned int nStakeTime;
     uint256 hashProof;
-
-    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
-    std::vector<unsigned char> vchBlockSig;
 
     //! block header
     int nVersion;
@@ -373,7 +372,6 @@ public:
     {
         return strprintf("CBlockIndex(nprev=%p, pskip=%p, nFile=%u, nDataPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%"PRI64x", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
             pprev, pskip , nFile, nDataPos, nHeight,
-            FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier, nStakeModifierChecksum,
             hashProof.ToString().c_str(),
@@ -382,8 +380,8 @@ public:
             GetBlockHash().ToString().c_str());
     }
 
-     bool GetCoinAge(CTxDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const;  // ppcoin: get transaction coin age
      bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
+
 
     //! Check whether this block index entry is valid up to the passed validity level.
     bool IsValid(enum BlockStatus nUpTo = BLOCK_VALID_TRANSACTIONS) const
@@ -444,7 +442,7 @@ public:
         // BlockSig only in block version 3
         // due to the transition from PoW to PoS
         if(nVersion >= 3)
-          READWRITE(vchBlockSig);
+          READWRITE(cb.vchBlockSig);
 
         if (nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO))
             READWRITE(VARINT(nFile));
@@ -460,7 +458,7 @@ public:
                 READWRITE(prevoutStake);
                 READWRITE(nStakeTime);
             }
-            else if (fRead)
+            else
             {
                 const_cast<CDiskBlockIndex*>(this)->prevoutStake.SetNull();
                 const_cast<CDiskBlockIndex*>(this)->nStakeTime = 0;

@@ -8,12 +8,17 @@
 
 #include "leveldbwrapper.h"
 #include "main.h"
+#include "coins.h"
 
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
+
+class CBlockFileInfo;
+struct CDiskTxPos;
+class CBlockIndex;
 class CCoins;
 class uint256;
 

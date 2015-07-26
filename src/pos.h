@@ -4,14 +4,11 @@
 #ifndef POS_H
 #define POS_H
 
-#include <test/bignum.h>
 #include "chain.h"
 #include "chainparams.h"
 #include "timedata.h"
-#include "wallet.h"
+#include "util.h"
 #include "main.h"
-
-class CWallet;
 
 
 extern unsigned int nStakeMinAge;
@@ -21,10 +18,8 @@ extern int64_t nLastCoinStakeSearchInterval;
 inline int64_t PastDrift(int64_t nTime)   { return nTime - 10 * 60; } // up to 10 minutes from the past
 inline int64_t FutureDrift(int64_t nTime) { return nTime + 10 * 60; } // up to 10 minutes from the future
 
-void StakeMiner(CWallet *pwallet);
 int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue, int64_t nFees, int64_t nHeight);
 int64_t GetPIRRewardCoinYear(int64_t nCoinValue, int64_t nHeight);
-
 
 
 // Netcoin PIR personal staking interest rate is organised into percentage reward bands based on the value of the coins being staked
@@ -59,25 +54,20 @@ unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBl
 // select stake target limit according to hard-coded conditions
 uint256 inline GetProofOfStakeLimit(int nHeight, unsigned int nTime)
 {
-        return bnProofOfStakeLimit;
+        return Params().ProofOfStakeLimit();
 }
 
 
 // entropy bit for stake modifier if chosen by modifier
-unsigned int GetStakeEntropyBit() const
+unsigned int GetStakeEntropyBit()
 {
+    CBlockHeader block;
     // Take last bit of block hash as entropy bit
-    unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
-    if (fDebug && GetBoolArg("-printstakemodifier"))
-        printf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString().c_str(), nEntropyBit);
+    unsigned int nEntropyBit = ((block.GetHash().GetLow64()));
+    if (fDebug && GetBoolArg("-printstakemodifier", true))
+        LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", block.GetHash().ToString().c_str(), nEntropyBit);
     return nEntropyBit;
 }
 
-
-
-std::pair<COutPoint, unsigned int> GetProofOfStake() const
-{
-    return IsProofOfStake()? std::make_pair(vtx[1].vin[0].prevout, nTime) : std::make_pair(COutPoint(), (unsigned int)0);
-}
 
 #endif // POS_H

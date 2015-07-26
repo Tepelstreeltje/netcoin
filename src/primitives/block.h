@@ -6,9 +6,12 @@
 #ifndef BITCOIN_PRIMITIVES_BLOCK_H
 #define BITCOIN_PRIMITIVES_BLOCK_H
 
+#define PRI64u  "I64u"
+
 #include "primitives/transaction.h"
 #include "serialize.h"
 #include "uint256.h"
+#include "utilstrencodings.h"
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -82,6 +85,9 @@ public:
     // network and disk
     std::vector<CTransaction> vtx;
 
+    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
+    std::vector<unsigned char> vchBlockSig;
+
     // memory only
     mutable std::vector<uint256> vMerkleTree;
 
@@ -102,6 +108,18 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(*(CBlockHeader*)this);
         READWRITE(vtx);
+
+        // BlockSig only in block version 3
+        // due to the transition from PoW to PoS
+    if(nVersion >= 3)
+        READWRITE(vchBlockSig);
+
+    else
+    {
+        const_cast<CBlock*>(this)->vtx.clear();
+        if(nVersion >= 3)
+            const_cast<CBlock*>(this)->vchBlockSig.clear();
+    }
     }
 
     void SetNull()
@@ -121,6 +139,28 @@ public:
         block.nBits          = nBits;
         block.nNonce         = nNonce;
         return block;
+    }
+
+    void print() const
+    {
+        printf("CBlock(hash=%s, PoW=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%"PRI64u", vchBlockSig=%s)\n",
+            GetHash().ToString().substr(0,20).c_str(),
+            GetPoWHash().ToString().substr(0,20).c_str(),
+            nVersion,
+            hashPrevBlock.ToString().substr(0,20).c_str(),
+            hashMerkleRoot.ToString().substr(0,10).c_str(),
+            nTime, nBits, nNonce,
+            vtx.size(),
+            HexStr(vchBlockSig.begin(), vchBlockSig.end()).c_str());
+        for (unsigned int i = 0; i < vtx.size(); i++)
+        {
+            printf("  ");
+            vtx[i].print();
+        }
+        printf("  vMerkleTree: ");
+        for (unsigned int i = 0; i < vMerkleTree.size(); i++)
+            printf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
+        printf("\n");
     }
 
     // Build the in-memory merkle tree for this block and return the merkle root.
