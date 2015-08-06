@@ -9,6 +9,8 @@
 
 #include "net.h"
 #include "pos.h"
+#include "miner.h"
+//#include "util.h"
 
 #include "addrman.h"
 #include "chainparams.h"
@@ -1161,17 +1163,6 @@ void ThreadDNSAddressSeed()
     LogPrintf("%d addresses found from DNS seeds\n", found);
 }
 
-
-
-
-
-
-
-
-
-
-
-
 void DumpAddresses()
 {
     int64_t nStart = GetTimeMillis();
@@ -1201,18 +1192,18 @@ void static ProcessOneShot()
     }
 }
 
-void static ThreadStakeMiner(void* parg)
+void static ThreadStakeMiner()
 {
     printf("ThreadStakeMiner started\n");
-    CWallet* pwallet = (CWallet*)parg;
+    CWallet* pwallet;
     try
     {
         StakeMiner(pwallet);
     }
     catch (std::exception& e) {
-        PrintException(&e, "ThreadStakeMiner()");
+        PrintExceptionContinue(&e, "ThreadStakeMiner()");
     } catch (...) {
-        PrintException(NULL, "ThreadStakeMiner()");
+        PrintExceptionContinue(NULL, "ThreadStakeMiner()");
     }
     printf("ThreadStakeMiner exiting, %d threads remaining\n");
 }
@@ -1679,7 +1670,7 @@ void StartNode(boost::thread_group& threadGroup)
     threadGroup.create_thread(boost::bind(&LoopForever<void (*)()>, "dumpaddr", &DumpAddresses, DUMP_ADDRESSES_INTERVAL * 1000));
 
     // Stakeminer
-    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "stakeminer", &threadstakeminer));
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "stakeminer", &ThreadStakeMiner));
 }
 
 bool StopNode()

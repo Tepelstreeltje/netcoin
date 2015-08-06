@@ -10,13 +10,16 @@
 #include "main.h"
 #include "ecwrapper.h"
 #include "primitives/transaction.h"
+#include "primitives/block.h"
+#include "utilmoneystr.h"
 
 using namespace std;
 
 unsigned int nStakeMinAge = 1 * 60 * 60; // 1 hour
 unsigned int nStakeMaxAge = 2592000; // 30 days
 
-bnProofOfStakeLimit(~uint256(0) >> 20);
+
+uint256 ProofOfStakeLimit((0) >> 20);
 
 // Netcoin: PERSONALISED INTEREST RATE CALCULATION
 // madprofezzor@gmail.com
@@ -24,7 +27,8 @@ bnProofOfStakeLimit(~uint256(0) >> 20);
 // returns an integer between 0 and PIR_PHASES-1 representing which PIR phase the supplied block height falls into
 int GetPIRRewardPhase(int64_t nHeight)
 {
-   int64_t Phase0StartHeight = (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET);
+   //int64_t Phase0StartHeight = (!fTestNet ? BLOCK_HEIGHT_POS_AND_DIGISHIELD_START : BLOCK_HEIGHT_POS_AND_DIGISHIELD_START_TESTNET);
+   int64_t Phase0StartHeight = 1;
    int phase = (int)( (nHeight-Phase0StartHeight) / PIR_PHASEBLOCKS);
    return min(PIR_PHASES-1, max(0,phase) );
 }
@@ -77,7 +81,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nCoinValue,  int64_t nFe
 
     int64_t nSubsidy = nCoinAge * nRewardCoinYear * 33 / (365 * 33 + 8); //integer equivalent of nCoinAge * nRewardCoinYear / 365.2424242..
 
-    if (fDebug && GetBoolArg("-printcreation"))
+    if (fDebug && GetBoolArg("-printcreation",true))
         printf("GetProofOfStakeReward(): PIR=%.1f create=%s nCoinAge=%"PRI64d" nCoinValue=%s nFees=%"PRI64d"\n", (double)nRewardCoinYear/(double)CENT, FormatMoney(nSubsidy).c_str(), nCoinAge, FormatMoney(nCoinValue).c_str(), nFees);
 
     return nSubsidy + nFees;
@@ -97,11 +101,20 @@ unsigned int ComputeMaxBits(uint256 bnTargetLimit, unsigned int nBase, int64_t n
         // Maximum 400% adjustment...
         bnResult *= 4;
         // ... in best-case exactly 4-times-normal target time
-        nTime -= Params().TargetTimespan*4;
+        nTime -= Params().TargetTimespan()*4;
     }
     if (bnResult > bnTargetLimit)
         bnResult = bnTargetLimit;
     return bnResult.GetCompact();
+}
+
+//
+// minimum amount of work that could possibly be required nTime after
+// minimum proof-of-work required was nBase
+//
+unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime)
+{
+    return ComputeMaxBits(Params().ProofOfWorkLimit(), nBase, nTime);
 }
 
 // minimum amount of stake that could possibly be required nTime after
@@ -109,7 +122,7 @@ unsigned int ComputeMaxBits(uint256 bnTargetLimit, unsigned int nBase, int64_t n
 //
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime)
 {
-    return ComputeMaxBits(bnProofOfStakeLimit, nBase, nTime);
+    return ComputeMaxBits(Params().ProofOfStakeLimit(), nBase, nTime);
 }
 
 // attempt to generate suitable proof-of-stake
@@ -131,24 +144,24 @@ bool CWallet::SignBlock(CWallet& wallet, int64_t nFees)
 
     CKey key;
     CTransaction txCoinStake;
-    int64_t nSearchTime = nTime; // search to current time
-    unsigned int nTxTime = nTime;
+    int64_t nSearchTime = vtx.nTime; // search to current time
+    unsigned int nTxTime = vtx.nTime;
 
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
-        if (wallet.CreateCoinStake(wallet, nBits, nSearchTime-nLastCoinStakeSearchTime, nFees, txCoinStake, nTxTime, key))
+        if (wallet.CreateCoinStake(wallet, vtx.nBits, nSearchTime-nLastCoinStakeSearchTime, nFees, txCoinStake, nTxTime, key))
         {
-            if (nTime >= max(pindexBestHeader->GetPastTimeLimit()+1, PastDrift(pindexBest->GetBlockTime())))
-            {block.
+            if (vtx.nTime >= max(pindexBestHeader->GetPastTimeLimit()+1, PastDrift(pindexBestHeader->GetBlockTime())))
+            {
                 // Pandacoin: since I've had to get rid of CTransaction's nTime,
                 // it's no longer possible to alter the nTime to fit the past block drift
-                nTime = nTxTime;
+                vtx.nTime = nTxTime;
 
                 vtx.vtx.insert(vtx.vtx.begin() + 1, txCoinStake);
-                hashMerkleRoot = BuildMerkleTree();
+                vtx.hashMerkleRoot = vtx.BuildMerkleTree();
 
                 // append a signature to our block
-                return key.Sign(vtx.GetHash(), pindexBestHeader->vchBlockSig);
+                return key.Sign(vtx.GetHash(), vtx.vchBlockSig);
             }
         }
         nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
@@ -167,15 +180,15 @@ bool CWallet::SignBlock(CWallet& wallet, int64_t nFees)
 // Coin Age is subjected to the following Time-Dilation function to make this happen
 //
 static const double timeDilationCoeff = 0.693147180559945309417/((double)COINAGE_TIME_DILATION_HALFLIFE_DAYS * 24.0 * 60.0 * 60.0);
-static const uint64 secondsAtFullReward = ((uint64)COINAGE_FULL_REWARD_DAYS * 24 * 60 * 60);
+static const UINT64 secondsAtFullReward = ((UINT64)COINAGE_FULL_REWARD_DAYS * 24 * 60 * 60);
 
-bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedCoinAge){
+bool ApplyTimeDilation(UINT64 timeReceived, UINT64 timeStaked, UINT64& nDilatedCoinAge){
     nDilatedCoinAge = 0;
-    uint64 timeDilationStarts = timeReceived + secondsAtFullReward;
+    UINT64 timeDilationStarts = timeReceived + secondsAtFullReward;
     if (timeStaked > timeDilationStarts)
     {
         nDilatedCoinAge = secondsAtFullReward +
-                (uint64)((1.0 / timeDilationCoeff) * (1.0 - exp(-timeDilationCoeff * (double)(timeStaked - timeDilationStarts))));
+                (UINT64)((1.0 / timeDilationCoeff) * (1.0 - exp(-timeDilationCoeff * (double)(timeStaked - timeDilationStarts))));
 
         if (fDebug && GetBoolArg("-printcoinage", true))
             LogPrintf("staked coins are %.3f days old. POS reward reduces by %.3f percent",
@@ -184,7 +197,7 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
                    );
 
         // sanity check. Dilation should produce a positive value <= the elapsed time between receiving and staking
-        nDilatedCoinAge = max(min(nDilatedCoinAge, timeStaked-timeReceived),(uint64)0);
+        nDilatedCoinAge = max(min(nDilatedCoinAge, timeStaked-timeReceived),(UINT64)0);
         return true;
     }
     else
@@ -192,7 +205,7 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
         if (fDebug && GetBoolArg("-printcoinage", true))
             LogPrintf("staked coins are younger than live wallet reward target. full coinage applies to reward");
 
-        nDilatedCoinAge = max((timeStaked-timeReceived),(uint64)0);
+        nDilatedCoinAge = max((timeStaked-timeReceived),(UINT64)0);
         return false;
     }
 
@@ -206,40 +219,47 @@ bool ApplyTimeDilation(uint64 timeReceived, uint64 timeStaked, uint64& nDilatedC
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool CBlockUndo::GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
+bool CTransaction::GetCoinAge(const CBlock& block, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const
 {
+    //CBlockIndex cbi;
+    CDiskBlockPos pos;
+    CDiskTxPos txpos;
+    CTransaction ct;
+    CMutableTransaction cmt;
+    CBlockUndo cbu;
+
     uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
     nCoinValue = 0;
 
-printf("GetCoinAge::%s\n", ToString().c_str());
+    printf("GetCoinAge::%s\n", ToString().c_str());
 
-    if (IsCoinBase())
+    if (ct.IsCoinBase())
         return true;
 
-    BOOST_FOREACH(const CTxIn& txin, vin)
+    CCoinsViewCache view(pcoinsTip);
+    BOOST_FOREACH(const CTxIn& txin, cmt.vin)
     {
-        //Helpzzz ReadFromDisk
         // First try finding the previous transaction in database
-       // CTransaction txPrev;
         //CTxIndex txindex;
        // if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
          //   continue;  // previous transaction not in main chain
+        if (!view.HaveCoins(txin.prevout.hash))
+                continue;  // previous transaction not in main chain
 
         // Read block header
-        CBlockIndex block;
-        CDiskBlockPos pos;
-        if (!pos.CDiskBlockPos(block.nFile, block.nDataPos))
+
+        if (!cbu.ReadFromDisk(pos,pindexBestHeader->GetBlockHash()))
             return false; // unable to read block of previous transaction
 
         unsigned int nPrevTime = block.GetBlockTime();
         if (nPrevTime + nStakeMinAge > nTxTime || nTxTime < nPrevTime)
             continue; // only count coins meeting min age requirement
 
-        int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
+        int64_t nValueIn = ct.vout[txin.prevout.n].nValue;
         nCoinValue += nValueIn;
 
-        uint64 nDilatedAge;
+        UINT64 nDilatedAge;
         if (ApplyTimeDilation(nPrevTime, nTxTime, nDilatedAge))
            bnCentSecond += uint256(nValueIn) * nDilatedAge / CENT;
         else
@@ -252,7 +272,7 @@ printf("GetCoinAge::%s\n", ToString().c_str());
     uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
     if (fDebug && GetBoolArg("-printcoinage", true))
         LogPrintf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
-    nCoinAge = bnCoinDay;
+    nCoinAge = bnCoinDay.GetLow64();
     return true;
 }
 
@@ -261,12 +281,13 @@ bool CBlockIndex::GetCoinAge(uint64_t& nCoinAge) const
 {
     nCoinAge = 0;
 
-    CBlockTreeDB txdb("r");
-    BOOST_FOREACH(const CTransaction& tx, vtx)
+    CBlockUndo cbu;
+    CBlock cb;
+    BOOST_FOREACH(const CTransaction& tx, cbu.vtx)
     {
         uint64_t nTxCoinAge;
         int64_t nCoinValue;
-        if (tx.GetCoinAge(txdb, nTime, nTxCoinAge, nCoinValue))
+        if (tx.GetCoinAge(cb, nTime, nTxCoinAge, nCoinValue))
             nCoinAge += nTxCoinAge;
         else
             return false;

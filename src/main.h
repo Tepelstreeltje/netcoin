@@ -18,7 +18,7 @@
 #include "primitives/transaction.h"
 #include "net.h"
 #include "pow.h"
-//#include "pos.h"
+
 #include "script/script.h"
 #include "script/sigcache.h"
 #include "script/standard.h"
@@ -322,13 +322,15 @@ public:
 
     bool WriteToDisk(CDiskBlockPos &pos, const uint256 &hashBlock);
     bool ReadFromDisk(const CDiskBlockPos &pos, const uint256 &hashBlock);
-    bool GetCoinAge(CBlockTreeDB& txdb, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const;  // ppcoin: get transaction coin age
+
 
     std::pair<COutPoint, unsigned int> GetProofOfStake() const
     {
         CBlockIndex block;
         return block.IsProofOfStake()? std::make_pair(vtx[1].vin[0].prevout, block.nTime) : std::make_pair(COutPoint(), (unsigned int)0);
     }
+
+        std::string ToString() const;
 
 };
 

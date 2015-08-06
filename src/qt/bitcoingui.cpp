@@ -15,6 +15,7 @@
 #include "optionsmodel.h"
 #include "rpcconsole.h"
 #include "utilitydialog.h"
+#include "wallet.h"
 
 #ifdef ENABLE_WALLET
 #include "walletframe.h"
@@ -60,6 +61,7 @@
 #endif
 
 const QString BitcoinGUI::DEFAULT_WALLET = "~Default";
+extern CWallet* pwalletMain;
 extern int64_t nLastCoinStakeSearchInterval;
 double GetPoSKernelPS();
 
@@ -190,6 +192,14 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle *networkStyle, QWidget *parent) :
     frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelBlocksIcon);
     frameBlocksLayout->addStretch();
+
+    if (GetBoolArg("-staking", true))
+    {
+        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
+        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
+        timerStakingIcon->start(30 * 1000);
+        updateStakingIcon();
+    }
 
     // Progress bar and label for blocks download
     progressBarLabel = new QLabel();
@@ -971,7 +981,7 @@ void BitcoinGUI::updateStakingIcon()
     if (nLastCoinStakeSearchInterval && nWeight)
     {
         uint64_t nNetworkWeight = GetPoSKernelPS();
-        unsigned nEstimateTime = nTargetSpacing * 2 * nNetworkWeight / nWeight;
+        unsigned nEstimateTime = Params().TargetSpacing() * 2 * nNetworkWeight / nWeight;
 
         QString text;
         if (nEstimateTime < 60)

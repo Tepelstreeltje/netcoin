@@ -207,6 +207,8 @@ private slots:
 
     /** Show progress dialog e.g. for verifychain */
     void showProgress(const QString &title, int nProgress);
+
+    void updateStakingIcon();
 };
 
 class UnitDisplayStatusBarControl : public QLabel

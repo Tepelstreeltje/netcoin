@@ -96,6 +96,7 @@ BITCOIN_CORE_H = \
   ecwrapper.h \
   hash.h \
   init.h \
+  kernel.h \
   key.h \
   keystore.h \
   leveldbwrapper.h \
@@ -108,6 +109,7 @@ BITCOIN_CORE_H = \
   net.h \
   noui.h \
   pow.h \
+  pos.h \
   protocol.h \
   pubkey.h \
   random.h \
@@ -167,6 +169,7 @@ libbitcoin_server_a_SOURCES = \
   chain.cpp \
   checkpoints.cpp \
   init.cpp \
+  kernel.cpp \
   leveldbwrapper.cpp \
   main.cpp \
   merkleblock.cpp \
@@ -249,6 +252,7 @@ libbitcoin_common_a_SOURCES = \
   key.cpp \
   keystore.cpp \
   netbase.cpp \
+  pos.cpp \
   protocol.cpp \
   pubkey.cpp \
   script/interpreter.cpp \
