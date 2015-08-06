@@ -73,7 +73,7 @@ public:
     int64_t StakeTargetSpacing() const { return nStakeTargetSpacing; }
     int64_t Interval() const { return nTargetTimespan / nTargetSpacing; }
     int64_t CoinbaseMaturity () const{return nCoinbaseMaturity; }
-    int64_t CoinStakeMaturity () const{return nCoinStakeMaturity; }
+    int CoinStakeMaturity () const{return nCoinStakeMaturity; }
     /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
     bool MineBlocksOnDemand() const { return fMineBlocksOnDemand; }
     /** In the future use NetworkIDString() for RPC fields */
@@ -102,7 +102,7 @@ protected:
     int64_t nTargetSpacing;
     int64_t nStakeTargetSpacing;
     int64_t nCoinbaseMaturity;
-    int64_t nCoinStakeMaturity;
+    int nCoinStakeMaturity;
     int nMinerThreads;
     int nStakeMinerThreads;
     std::vector<CDNSSeedData> vSeeds;
