@@ -24,7 +24,6 @@
 #include "wallet.h"
 #include "chain.h"
 #include "coins.h"
-#include "crypto/scrypt.h"
 
 #include <sstream>
 
@@ -34,7 +33,6 @@
 #include <boost/thread.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
-#include <cmath>
 
 using namespace boost;
 using namespace std;
@@ -65,8 +63,6 @@ bool fReindex = false;
 bool fTxIndex = false;
 bool fIsBareMultisigStd = true;
 unsigned int nCoinCacheSize = 5000;
-
-unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
 set<pair<COutPoint, unsigned int> > setStakeSeen;
 set<pair<COutPoint, unsigned int> > setStakeSeenOrphan;
@@ -239,7 +235,7 @@ void SyncWithWallets(const CTransaction &tx, const CBlock *pblock, bool fUpdate,
         return;
     }
 
-        //BOOST_FOREACH(CWallet* pwalletMain, setpwalletRegistered )
+   // BOOST_FOREACH(CWallet* pwalletMain, setpwalletRegistered )
         pwalletMain->AddToWalletIfInvolvingMe(tx, pblock, fUpdate);
 
     g_signals.SyncTransaction(tx, pblock);
@@ -1474,7 +1470,6 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
         {
             const COutPoint &prevout = tx.vin[i].prevout;
             const CCoins *coins = inputs.AccessCoins(prevout.hash);
-
             assert(coins);
 
             // If prev is coinbase, check that it's matured
@@ -1757,7 +1752,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             return state.DoS(100, error("ConnectBlock() : too many sigops"),
                              REJECT_INVALID, "bad-blk-sigops");
 
-        if (!tx.IsCoinBase())
+        if (!cc.IsCoinBase())
         {
             if (!view.HaveInputs(tx))
                 return state.DoS(100, error("ConnectBlock() : inputs missing/spent"),
@@ -1803,16 +1798,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         if (blockundo.vtx[0].GetValueOut() > GetBlockValue(pindex->nHeight, nFees))
         return state.DoS(100,
                          error("ConnectBlock() : coinbase pays too much (actual=%d vs limit=%d)",
-                               block.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, nFees)),
+                               blockundo.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, nFees)),
                                REJECT_INVALID, "bad-cb-amount");
         if (ix.IsProofOfStake())
         {
             // ppcoin: coin stake tx earns reward instead of paying fee
             uint64_t nCoinAge;
             int64_t nCoinValue;
-
-            if (!blockundo.vtx[1].GetCoinAge(block, block.nTime, nCoinAge, nCoinValue))
-                return error("ConnectBlock() : %s unable to get coin age for coinstake", block.vtx[1].GetHash().ToString().substr(0,10).c_str());
 
             int64_t nCalculatedStakeReward = GetProofOfStakeReward(nCoinAge, nCoinValue, nFees, pindex->nHeight);
 
@@ -2357,8 +2349,8 @@ CBlockIndex* AddToBlockIndex(const CBlockHeader& block, const uint256& hashProof
     pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + GetBlockProof(*pindexNew);
 
     // ppcoin: compute stake entropy bit for stake modifier
-    if (!pindexNew->SetStakeEntropyBit(ix.getStakeEntropyBit()))
-      //  return  ( error("getStakeEntropyBit() failed"));
+    //if (!pindexNew-> GetStakeEntropyBit())
+       // return  ( error("AddToBlockIndex() : GetStakeEntropyBit() failed"));
 
     // Record proof hash value
     pindexNew->hashProof = hashProof;
@@ -2814,8 +2806,6 @@ void CBlockIndex::BuildSkip()
 
 bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDiskBlockPos *dbp)
 {
-    uint256 hash = pblock->GetHash();
-    static std::multimap<uint256, CDiskBlockPos> mapBlocksUnknownParent;
     // Preliminary checks
     bool checked = CheckBlock(*pblock, state);
 
@@ -2823,12 +2813,11 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
 
-    /// Helpzzz mapOrphanTransactionsByPrev,mapOrphanBlocks,mapOrphanBlocksByPrev,PushGetBlocks
+    // Helpzzz mapOrphanTransactionsByPrev,mapOrphanBlocks,mapOrphanBlocksByPrev,PushGetBlocks
 
-    CBlockUndo* cbu;
-    CBlockIndex cbi;
-    if (cbi.IsProofOfStake() && setStakeSeen.count( cbu->GetProofOfStake()) && !mapBlocksUnknownParent.count(hash) /*&& !Checkpoints::CheckBlock(*pblock, hash)*/)
-      return error("ProcessNewBlock() : duplicate proof-of-stake (%s, %d) for block %s", cbu->GetProofOfStake().first.ToString().c_str(), cbu->GetProofOfStake().second, hash.ToString().c_str());
+   // uint256 hash = pblock->GetHash();
+   //if (IsProofOfStake() && setStakeSeen.count(GetProofOfStake()) && !mapOrphanTransactionsByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+        //return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(), block.GetProofOfStake().second, hash.ToString().c_str());
 
     CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint();
     if (pcheckpoint && pblock->hashPrevBlock != chainActive.Tip()->GetBlockHash())
@@ -2839,7 +2828,7 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
             if (deltaTime < 0)
             {
                Misbehaving(pfrom->GetId(), 100);
-                return error("ProcessNewBlock() : block with timestamp before last checkpoint");
+                return error("ProcessBlock() : block with timestamp before last checkpoint");
             }
 
     uint256 bnNewBlock;
@@ -2847,34 +2836,32 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
     uint256 bnRequired;
 
     if (ix.IsProofOfStake())
-        bnRequired.SetCompact(ComputeMinStake(chainActive.Tip()->nBits, deltaTime, pblock->nTime));
+        bnRequired.SetCompact(ComputeMinStake(pblock->nBits, deltaTime, pblock->nTime));
     else
-        bnRequired.SetCompact(ComputeMinWork(chainActive.Tip()->nBits, deltaTime));
+        bnRequired.SetCompact(ComputeMinWork(pblock->nBits, deltaTime));
 
     if (bnNewBlock > bnRequired)
     {
             Misbehaving(pfrom->GetId(), 100);
-        return error("ProcessNewBlock() : block with too little %s", ix.IsProofOfStake()? "proof-of-stake" : "proof-of-work");
+        return error("ProcessBlock() : block with too little %s", ix.IsProofOfStake()? "proof-of-stake" : "proof-of-work");
     }
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        LogPrintf("ProcessNewBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
-       //CDiskBlockPos *dbp2 = new CDiskBlockPos (dbp);
-        CBlock* pblock2 = new CBlock(*pblock);
+        LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().substr(0,20).c_str());
+        CBlockIndex* pblock2 = new CBlockIndex(*pblock);
         // ppcoin: check proof-of-stake
-        if (cbi.IsProofOfStake())
+        if (pblock2->IsProofOfStake())
         {
             // Limited duplicity on stake: prevents block flood attack
             // Duplicate stake allowed only when there is orphan child block
-            if (setStakeSeenOrphan.count(cbu->GetProofOfStake()) && !mapBlocksUnknownParent.count(hash) /*&& !Checkpoints::CheckBlock(*pblock, hash)*/)
-                return error("ProcessNewBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", cbu->GetProofOfStake().first.ToString().c_str(), cbu->GetProofOfStake().second, hash.ToString().c_str());
+           // if (setStakeSeenOrphan.count(pblock2->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+               // return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock2->GetProofOfStake().first.ToString().c_str(), pblock2->GetProofOfStake().second, hash.ToString().c_str());
           //  else
-                setStakeSeenOrphan.insert(cbu->GetProofOfStake());
+                setStakeSeenOrphan.insert(blockundo.GetProofOfStake());
         }
-
-         mapBlocksUnknownParent.insert(std::make_pair(hash, *dbp));
-         mapBlocksUnknownParent.insert(std::make_pair(pblock2->hashPrevBlock, *dbp));
+        //mapOrphanBlocks.insert(make_pair(hash, pblock2));
+        //mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
         //if (pfrom)
@@ -2882,8 +2869,8 @@ bool ProcessNewBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDis
         //   pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
             // ppcoin: getblocks may not obtain the ancestor block rejected
             // earlier by duplicate-stake check so we ask for it again directly
-           //if (!IsInitialBlockDownload())
-               // CNode::AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+          //  if (!IsInitialBlockDownload())
+              //  CNode::AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
      //   }
         return true;
     }
@@ -3023,7 +3010,6 @@ CBlockIndex * InsertBlockIndex(uint256 hash)
 
 bool static LoadBlockIndexDB()
 {
-
     if (!pblocktree->LoadBlockIndexGuts())
         return false;
 

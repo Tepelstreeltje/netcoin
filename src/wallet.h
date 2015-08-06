@@ -121,7 +121,6 @@ private:
     bool SelectCoins(const CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, const CCoinControl *coinControl = NULL) const;
     bool SelectCoinsSimple(int64_t nTargetValue, int nMinConf, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
-
     CWalletDB *pwalletdbEncryption;
 
     //! the current wallet version: clients below this version are not able to load the wallet
@@ -231,7 +230,6 @@ public:
     void UnlockAllCoins();
     void ListLockedCoins(std::vector<COutPoint>& vOutpts);
     bool SignBlock(CWallet& keystore, int64_t nFees);
-    bool CreateCoinStake(const CKeyStore& keystore , unsigned int nBits, int64_t nSearchInterval, int64_t nFees, CMutableTransaction txNew, unsigned int& nTxTime, CKey& key);
 
     /**
      * keystore implementation
@@ -311,7 +309,7 @@ public:
                            CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, std::string& strTxComment, const CCoinControl *coinControl = NULL);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
-    bool GetStakeWeight(const CKeyStore& keystore, uint64_t &nMinWeight, uint64_t &nMaxWeight, uint64_t &nWeight);
+    bool GetStakeWeight(const CKeyStore& keystore, uint64_t& nMinWeight, uint64_t& nMaxWeight, uint64_t& nWeight);
 
     int64_t GetStake() const;
 
@@ -345,22 +343,19 @@ public:
         return ((IsMine(txout) & filter) ? txout.nValue : 0);
     }
     bool IsChange(const CTxOut& txout) const;
-
     CAmount GetChange(const CTxOut& txout) const
     {
         if (!MoneyRange(txout.nValue))
             throw std::runtime_error("CWallet::GetChange() : value out of range");
         return (IsChange(txout) ? txout.nValue : 0);
     }
-
-    bool IsMine(const CTransaction& tx) const
-    {
-       BOOST_FOREACH(const CTxOut& txout, tx.vout)
-           if (IsMine(txout))
-               return true;
-       return false;
-    }
-
+    bool IsMine(const CTransaction& tx) const;
+    //{
+      //  BOOST_FOREACH(CTxOut& txout, tx.vout)
+        //    if (IsMine(txout))
+        //        return true;
+       // return false;
+    // }
     /** should probably be renamed to IsRelevantToMe */
     bool IsFromMe(const CTransaction& tx) const
     {

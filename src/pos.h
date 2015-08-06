@@ -1,21 +1,19 @@
-// Copyright (c) 2009-2015 The Netcoin developers
+// Copyright (c) 2009-2014 The Netcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef POS_H
 #define POS_H
 
-//#include "chain.h"
+#include "chain.h"
 #include "chainparams.h"
-//#include "timedata.h"
-//#include "util.h"
-//#include "main.h"
+#include "timedata.h"
+#include "util.h"
+#include "main.h"
 
 
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern int64_t nLastCoinStakeSearchInterval;
-
-
 
 inline int64_t PastDrift(int64_t nTime)   { return nTime - 10 * 60; } // up to 10 minutes from the past
 inline int64_t FutureDrift(int64_t nTime) { return nTime + 10 * 60; } // up to 10 minutes from the future
@@ -59,6 +57,17 @@ uint256 inline GetProofOfStakeLimit(int nHeight, unsigned int nTime)
         return Params().ProofOfStakeLimit();
 }
 
+
+// entropy bit for stake modifier if chosen by modifier
+unsigned int GetStakeEntropyBit()
+{
+    CBlockHeader block;
+    // Take last bit of block hash as entropy bit
+    unsigned int nEntropyBit = ((block.GetHash().GetLow64()));
+    if (fDebug && GetBoolArg("-printstakemodifier", true))
+        LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", block.GetHash().ToString().c_str(), nEntropyBit);
+    return nEntropyBit;
+}
 
 
 #endif // POS_H

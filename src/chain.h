@@ -11,7 +11,7 @@
 
 #include "primitives/block.h"
 #include "pow.h"
-#include "util.h"
+//#include "pos.h"
 #include "tinyformat.h"
 #include "uint256.h"
 
@@ -20,7 +20,7 @@
 
 #include <boost/foreach.hpp>
 
-//CBlock cb;
+CBlock cb;
 
 struct CDiskBlockPos
 {
@@ -356,18 +356,6 @@ public:
         return true;
     }
 
-    // entropy bit for stake modifier if chosen by modifier
-    unsigned int getStakeEntropyBit() const
-    {
-        CBlock cb;
-        // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((cb.GetHash().GetLow64()));
-        if (fDebug && GetBoolArg("-printstakemodifier", true))
-            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", cb.GetHash().ToString(), nEntropyBit);
-        return nEntropyBit;
-    }
-
-
     bool GeneratedStakeModifier() const
     {
         return (nFlags & BLOCK_STAKE_MODIFIER);
@@ -393,7 +381,6 @@ public:
     }
 
      bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
-
 
 
     //! Check whether this block index entry is valid up to the passed validity level.
@@ -454,7 +441,6 @@ public:
 
         // BlockSig only in block version 3
         // due to the transition from PoW to PoS
-        CBlock cb;
         if(nVersion >= 3)
           READWRITE(cb.vchBlockSig);
 

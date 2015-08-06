@@ -10,9 +10,7 @@
 #include "script/script.h"
 #include "serialize.h"
 #include "uint256.h"
-//#include "primitives/block.h"
 
-class CBlock;
 
 /** An outpoint - a combination of a transaction hash and an index n into its vout */
 class COutPoint
@@ -256,8 +254,6 @@ public:
     // Compute modified tx size for priority calculation (optionally given tx size)
     unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const;
 
-    bool GetCoinAge(const CBlock& block, unsigned int nTxTime, uint64_t& nCoinAge, int64_t& nCoinValue) const;  // ppcoin: get transaction coin age
-
     bool IsCoinBase() const
         {
             return (vin.size() == 1 && vin[0].prevout.IsNull());
@@ -277,11 +273,6 @@ public:
     friend bool operator!=(const CTransaction& a, const CTransaction& b)
     {
         return a.hash != b.hash;
-    }
-
-    void print() const
-    {
-        printf("%s", ToString().c_str());
     }
 
     std::string ToString() const;

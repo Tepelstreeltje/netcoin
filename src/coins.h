@@ -151,6 +151,7 @@ public:
         return fCoinBase;
     }
 
+
     unsigned int GetSerializeSize(int nType, int nVersion) const {
         unsigned int nSize = 0;
         unsigned int nMaskSize = 0, nMaskCode = 0;

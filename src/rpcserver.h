@@ -128,8 +128,6 @@ extern std::vector<unsigned char> ParseHexO(const json_spirit::Object& o, std::s
 extern void InitRPCMining();
 extern void ShutdownRPCMining();
 
-extern double GetPoSKernelPS();
-
 extern int64_t nWalletUnlockTime;
 extern CAmount AmountFromValue(const json_spirit::Value& value);
 extern json_spirit::Value ValueFromAmount(const CAmount& amount);

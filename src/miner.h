@@ -28,7 +28,7 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
 /** Check mined proof-of-work block */
 bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey);
 /** Check mined proof-of-stake block */
-bool CheckStake(CBlockTemplate *pblock, CWallet& wallet);
+bool CheckStake(CBlock* pblock, CWallet& wallet);
 void StakeMiner(CWallet *pwallet);
 
 void UpdateTime(CBlockHeader* block, const CBlockIndex* pindexPrev);

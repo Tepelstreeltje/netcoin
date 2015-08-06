@@ -14,10 +14,9 @@
 #include "pow.h"
 #include "rpcserver.h"
 #include "util.h"
-#include "kernel.h"
-#include "wallet.h"
 #ifdef ENABLE_WALLET
 #include "db.h"
+#include "wallet.h"
 #endif
 
 #include <stdint.h>
@@ -226,7 +225,6 @@ Value gethashespersec(const Array& params, bool fHelp)
 
 Value getmininginfo(const Array& params, bool fHelp)
 {
-    CBlockIndex cbi;
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getmininginfo\n"
@@ -250,23 +248,20 @@ Value getmininginfo(const Array& params, bool fHelp)
             + HelpExampleRpc("getmininginfo", "")
         );
 
-    uint64_t nMinWeight = 0, nMaxWeight = 0, nWeight = 0;
-    pwalletMain->GetStakeWeight(*pwalletMain, nMinWeight, nMaxWeight, nWeight);
-
     Object obj, diff, weight;
     obj.push_back(Pair("blocks",           (int)chainActive.Height()));
     obj.push_back(Pair("currentblocksize", (uint64_t)nLastBlockSize));
     obj.push_back(Pair("currentblocktx",   (uint64_t)nLastBlockTx));
     obj.push_back(Pair("difficulty",       (double)GetDifficulty()));
 
-    diff.push_back(Pair("proof-of-stake",  GetDifficulty()));
+    diff.push_back(Pair("proof-of-stake",  GetDifficulty(chainActive.SetTip(pindexBestHeader, true))));
     diff.push_back(Pair("search-interval", (int)nLastCoinStakeSearchInterval));
     obj.push_back(Pair("netstakeweight",   GetPoSKernelPS()));
-    weight.push_back(Pair("minimum",       (uint64_t) nMinWeight));
+    weight.push_back(Pair("minimum",       (uint64_t)nMinWeight));
     weight.push_back(Pair("maximum",       (uint64_t)nMaxWeight));
     weight.push_back(Pair("combined",      (uint64_t)nWeight));
     obj.push_back(Pair("stakeweight",      weight));
-    obj.push_back(Pair("stakeinterest",    (uint64_t)GetPIRRewardCoinYear(pwalletMain->GetBalance(),cbi.nHeight)));
+    obj.push_back(Pair("stakeinterest",    (uint64_t)GetPIRRewardCoinYear(pwalletMain->GetBalance(),nBestHeight)));
 
     obj.push_back(Pair("errors",           GetWarnings("statusbar")));
     obj.push_back(Pair("genproclimit",     (int)GetArg("-genproclimit", -1)));
@@ -538,7 +533,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
     // Update nTime
-    UpdateTime(pblock, pindexPrev);
+    //UpdateTime(pblock, pindexPrev);
+    pblock->nTime = max(pindexPrev->GetPastTimeLimit()+1, GetAdjustedTime());
     pblock->nNonce = 0;
 
     static const Array aCaps = boost::assign::list_of("proposal");
